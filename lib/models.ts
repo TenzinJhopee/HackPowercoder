@@ -40,18 +40,6 @@ export type Transaction = z.infer<typeof transactionSchema>;
 export type TransactionType = z.infer<typeof transactionTypeSchema>;
 export type TransactionCategory = z.infer<typeof transactionCategorySchema>;
 
-export interface Investment {
-  id: string;
-  ticker: string;
-  name: string;
-  quantity: number;
-  purchasePrice: number;
-  currentPrice: number;
-  currency: string;
-  purchaseDate: string;
-  priceSource?: "manual" | "live";
-}
-
 export interface Budget {
   id: string;
   category: string;
@@ -73,11 +61,6 @@ export interface UpcomingBill {
   amount: number;
   currency: string;
   dueDate: string;
-}
-
-export interface SavingsTarget {
-  currency: string;
-  monthlyAmount: number;
 }
 
 export interface ColumnMapping {

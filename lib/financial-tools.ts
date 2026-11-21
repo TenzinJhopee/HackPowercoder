@@ -1,15 +1,15 @@
 import {
   analyzeTransactions,
   calculateBudget,
-  calculatePortfolio,
   forecastCashFlow,
+  getBalanceSeries,
   generateSavingsOpportunities,
   getCategoryTotals,
   getLatestMonth,
   suggestBudgetLimits,
   summarizeMonth
 } from "@/lib/intelligence";
-import type { Budget, Investment, Transaction, UpcomingBill } from "@/lib/models";
+import type { Budget, Transaction, UpcomingBill } from "@/lib/models";
 
 export function get_financial_summary(transactions: Transaction[], currency: string) {
   const analysis = analyzeTransactions(transactions, currency);
@@ -101,17 +101,8 @@ export function get_cashflow_forecast(transactions: Transaction[], bills: Upcomi
   return forecastCashFlow(transactions, bills, currency, asOf);
 }
 
-export function get_investment_portfolio(investments: Investment[], currency: string) {
-  return calculatePortfolio(investments, currency);
-}
-
-export function calculate_investment_performance(investments: Investment[], currency: string) {
-  const portfolio = calculatePortfolio(investments, currency);
-  return {
-    ...portfolio,
-    pricesAreManual: true,
-    note: "Performance uses manually entered purchase and current prices; it is not live market data."
-  };
+export function get_balance_series(transactions: Transaction[], currency: string, openingBalance = 0) {
+  return getBalanceSeries(transactions, currency, openingBalance);
 }
 
 function nextMonth(month: string) {

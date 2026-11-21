@@ -24,15 +24,54 @@ export async function transcribeWithElevenLabs(audio: Blob, apiKey: string, fetc
   return parsed.data.text;
 }
 
-export async function speakWithElevenLabs(text: string, voiceId: string, apiKey: string, fetcher: typeof fetch = fetch): Promise<ArrayBuffer> {
-  const response = await fetcher(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, {
+export const DEFAULT_MODEL_ID = "eleven_multilingual_v2";
+
+const alignmentSchema = z.object({
+  characters: z.array(z.string()),
+  character_start_times_seconds: z.array(z.number()),
+  character_end_times_seconds: z.array(z.number())
+});
+const timestampsSchema = z.object({
+  audio_base64: z.string().min(1),
+  alignment: alignmentSchema.nullable(),
+  normalized_alignment: alignmentSchema.nullable().optional()
+});
+
+export type Alignment = z.infer<typeof alignmentSchema>;
+export type SpokenWord = { word: string; start: number; end: number; charStart: number; charEnd: number };
+export type SpeechResult = { audioBase64: string; mimeType: "audio/mpeg"; words: SpokenWord[]; alignment: Alignment };
+
+/** Splits character-level alignment into whitespace-separated words; `word` has edge punctuation stripped. charEnd is exclusive. */
+export function wordsFromAlignment(alignment: Alignment): SpokenWord[] {
+  const { characters, character_start_times_seconds: starts, character_end_times_seconds: ends } = alignment;
+  const words: SpokenWord[] = [];
+  let first = -1;
+  const flush = (endExclusive: number) => {
+    if (first < 0) return;
+    const raw = characters.slice(first, endExclusive).join("");
+    const word = raw.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    if (word) words.push({ word, start: starts[first], end: ends[endExclusive - 1], charStart: first, charEnd: endExclusive });
+    first = -1;
+  };
+  for (let i = 0; i < characters.length; i++) {
+    if (/^\s+$/.test(characters[i])) flush(i);
+    else if (first < 0) first = i;
+  }
+  flush(characters.length);
+  return words;
+}
+
+export async function speakWithElevenLabs(
+  text: string,
+  voiceId: string,
+  apiKey: string,
+  fetcher: typeof fetch = fetch,
+  modelId: string = DEFAULT_MODEL_ID
+): Promise<SpeechResult> {
+  const response = await fetcher(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps?output_format=mp3_44100_128`, {
     method: "POST",
-    headers: {
-      "xi-api-key": apiKey,
-      "Content-Type": "application/json",
-      Accept: "audio/mpeg"
-    },
-    body: JSON.stringify({ text, model_id: "eleven_multilingual_v2" }),
+    headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
+    body: JSON.stringify({ text, model_id: modelId }),
     signal: AbortSignal.timeout(45_000)
   });
   if (!response.ok) {
@@ -45,12 +84,17 @@ export async function speakWithElevenLabs(text: string, voiceId: string, apiKey:
     }
     throw new Error(detail ? `ElevenLabs speech generation failed: ${detail}` : "ElevenLabs speech generation failed.");
   }
-  if (!response.headers.get("content-type")?.toLowerCase().startsWith("audio/")) {
-    throw new Error("ElevenLabs returned an unsupported audio format.");
-  }
   const contentLength = Number(response.headers.get("content-length") ?? 0);
-  if (contentLength > MAX_SPEECH_RESPONSE_BYTES) throw new Error("Generated speech is larger than the allowed response size.");
-  const audio = await response.arrayBuffer();
-  if (!audio.byteLength || audio.byteLength > MAX_SPEECH_RESPONSE_BYTES) throw new Error("ElevenLabs returned invalid audio.");
-  return audio;
+  if (contentLength > MAX_SPEECH_RESPONSE_BYTES * 2) throw new Error("Generated speech is larger than the allowed response size.");
+  let json: unknown;
+  try {
+    json = await response.json();
+  } catch {
+    throw new Error("ElevenLabs returned an invalid speech response.");
+  }
+  const parsed = timestampsSchema.safeParse(json);
+  if (!parsed.success || !parsed.data.alignment) throw new Error("ElevenLabs returned an invalid speech response.");
+  if (parsed.data.audio_base64.length > MAX_SPEECH_RESPONSE_BYTES * 2) throw new Error("Generated speech is larger than the allowed response size.");
+  const { alignment } = parsed.data;
+  return { audioBase64: parsed.data.audio_base64, mimeType: "audio/mpeg", words: wordsFromAlignment(alignment), alignment };
 }

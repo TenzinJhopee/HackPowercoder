@@ -1,13 +1,4 @@
-import type {
-  Budget,
-  CategoryRule,
-  Investment,
-  SavingsTarget,
-  Transaction,
-  TransactionCategory,
-  TransactionType,
-  UpcomingBill
-} from "@/lib/models";
+import type { CategoryRule, Transaction, TransactionCategory, UpcomingBill } from "@/lib/models";
 
 export interface MonthlySummary {
   key: string;
@@ -81,28 +72,6 @@ export interface SavingsOpportunity {
   transactionIds: string[];
 }
 
-export interface SavingsPlan {
-  monthlyIncome: number;
-  currentMonthlySavings: number;
-  targetMonthlySavings: number;
-  targetGap: number;
-  estimatedOpportunity: number;
-  actions: SavingsOpportunity[];
-}
-
-export interface FinancialInsight {
-  id: string;
-  title: string;
-  explanation: string;
-  evidence: string;
-  financialImpact: number;
-  impactLabel: string;
-  suggestedAction: string;
-  confidence: number;
-  confidenceLabel: "High" | "Medium" | "Low";
-  transactionIds: string[];
-}
-
 export interface ForecastHorizon {
   days: 30 | 90;
   projectedIncome: number;
@@ -122,15 +91,6 @@ export interface CashFlowForecast {
   horizons: [ForecastHorizon, ForecastHorizon];
   assumptions: string[];
   confidence: number;
-}
-
-export interface PortfolioAnalysis {
-  currency: string;
-  totalInvested: number;
-  currentValue: number;
-  unrealizedProfitLoss: number;
-  returnPercent: number;
-  allocation: { id: string; name: string; ticker: string; value: number; sharePercent: number }[];
 }
 
 const categoryKeywords: Record<Exclude<TransactionCategory, "Income" | "Transfers" | "Investments" | "Other">, string[]> = {
@@ -191,43 +151,6 @@ export function classifyTransaction(
   return order.find((category) => categoryKeywords[category].some((keyword) => text.includes(normalizedText(keyword)))) ?? "Other";
 }
 
-function legacyCategory(category: string): TransactionCategory | undefined {
-  const aliases: Record<string, TransactionCategory> = {
-    salary: "Income",
-    "other income": "Income",
-    refunds: "Income",
-    transfers: "Transfers",
-    investments: "Investments",
-    "food & dining": "Food",
-    restaurants: "Restaurants",
-    "health & insurance": "Healthcare",
-    "online payments": "Other",
-    bills: "Utilities"
-  };
-  if (category in aliases) return aliases[category];
-  return isTransactionCategory(category) ? category : undefined;
-}
-
-function isTransactionCategory(value: string): value is TransactionCategory {
-  return [
-    "Income", "Housing", "Food", "Restaurants", "Transport", "Healthcare", "Insurance",
-    "Shopping", "Entertainment", "Utilities", "Subscriptions", "Investments", "Transfers", "Other"
-  ].includes(value);
-}
-
-export function applyClassificationRules(transactions: Transaction[], rules: CategoryRule[] = []): Transaction[] {
-  return transactions.map((transaction) => {
-    if (transaction.categorySource === "manual") {
-      return {
-        ...transaction,
-        category: legacyCategory(transaction.category) ?? classifyTransaction(transaction, rules),
-        categorySource: "manual"
-      };
-    }
-    return { ...transaction, category: classifyTransaction(transaction, rules), categorySource: "rule" };
-  });
-}
-
 export function deduplicateTransactions(transactions: Transaction[]) {
   const seenIds = new Set<string>();
   const seenSignatures = new Set<string>();
@@ -273,10 +196,6 @@ function sumAbsolute(transactions: Transaction[]) {
   return transactions.reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
 }
 
-export function getCurrencies(transactions: Transaction[]) {
-  return [...new Set(transactions.map((transaction) => transaction.currency))].sort();
-}
-
 export function getLatestMonth(transactions: Transaction[]) {
   return transactions.reduce((latest, item) => monthKey(item.date) > latest ? monthKey(item.date) : latest, "");
 }
@@ -313,11 +232,6 @@ function createMonthlySummary(transactions: Transaction[], currency: string, key
     savings: summary.savings,
     cashFlow: summary.cashFlow
   };
-}
-
-export function getMonthlySummaries(transactions: Transaction[], currency: string, endMonth: string): MonthlySummary[] {
-  if (!endMonth) return [];
-  return Array.from({ length: 12 }, (_, index) => createMonthlySummary(transactions, currency, addMonths(endMonth, index - 11)));
 }
 
 function getFullMonthlySummaries(transactions: Transaction[], currency: string) {
@@ -595,163 +509,6 @@ export function generateSavingsOpportunities(transactions: Transaction[], curren
   return opportunities.sort((a, b) => b.monthlySavings - a.monthlySavings);
 }
 
-export function createSavingsPlan(transactions: Transaction[], currency: string, target?: SavingsTarget): SavingsPlan {
-  const analysis = analyzeTransactions(transactions, currency);
-  const months = Math.max(1, analysis.monthCount);
-  const monthlyIncome = analysis.totalIncome / months;
-  const currentMonthlySavings = analysis.monthlySavings;
-  const targetMonthlySavings = target?.currency === currency ? target.monthlyAmount : monthlyIncome * 0.2;
-  const opportunities = generateSavingsOpportunities(transactions, currency);
-  const actions = opportunities.slice(0, 3);
-  const uniqueCategoryPotential = new Map<TransactionCategory, number>();
-  actions.forEach((item) => uniqueCategoryPotential.set(item.category, Math.max(uniqueCategoryPotential.get(item.category) ?? 0, item.monthlySavings)));
-  const estimatedOpportunity = [...uniqueCategoryPotential.values()].reduce((sum, amount) => sum + amount, 0);
-  return {
-    monthlyIncome,
-    currentMonthlySavings,
-    targetMonthlySavings,
-    targetGap: Math.max(0, targetMonthlySavings - currentMonthlySavings),
-    estimatedOpportunity,
-    actions
-  };
-}
-
-function confidenceLabel(confidence: number): FinancialInsight["confidenceLabel"] {
-  if (confidence >= 0.8) return "High";
-  if (confidence >= 0.6) return "Medium";
-  return "Low";
-}
-
-export function generateFinancialInsights(transactions: Transaction[], currency: string): FinancialInsight[] {
-  const selected = transactions.filter((item) => item.currency === currency && item.type !== "transfer");
-  if (!selected.length) return [];
-  const analysis = analyzeTransactions(selected, currency);
-  const insights: FinancialInsight[] = [];
-  const savingsRate = analysis.savingsRate;
-  insights.push({
-    id: "cash-flow",
-    title: analysis.netCashFlow >= 0 ? "Recorded cash flow is positive" : "Recorded cash flow is negative",
-    explanation: `Across ${analysis.monthCount} calendar month${analysis.monthCount === 1 ? "" : "s"}, eligible inflows and outflows produced ${analysis.netCashFlow.toFixed(2)} ${currency} net cash flow.`,
-    evidence: `${analysis.totalIncome.toFixed(2)} income + ${analysis.totalRefunds.toFixed(2)} refunds − ${analysis.totalExpenses.toFixed(2)} expenses − ${analysis.totalInvestments.toFixed(2)} investment purchases.`,
-    financialImpact: analysis.netCashFlow,
-    impactLabel: "Recorded net cash flow",
-    suggestedAction: "Use this as transaction activity only; reconcile it against a confirmed account balance.",
-    confidence: 0.94,
-    confidenceLabel: "High",
-    transactionIds: selected.map((item) => item.id)
-  });
-  insights.push({
-    id: "savings-rate",
-    title: savingsRate >= 0.2 ? "Savings are at or above a 20% benchmark" : "There may be room to grow savings",
-    explanation: `Recorded savings are ${Math.round(savingsRate * 100)}% of recorded income for the imported period.`,
-    evidence: `${analysis.monthlySavings.toFixed(2)} ${currency} average monthly savings / ${((analysis.totalIncome / Math.max(1, analysis.monthCount))).toFixed(2)} ${currency} average monthly income.`,
-    financialImpact: analysis.monthlySavings,
-    impactLabel: "Average monthly savings",
-    suggestedAction: savingsRate >= 0.2 ? "Keep reviewing the plan as new months are imported." : "Choose a monthly target that fits your priorities and available cash.",
-    confidence: analysis.monthCount >= 3 ? 0.86 : 0.58,
-    confidenceLabel: confidenceLabel(analysis.monthCount >= 3 ? 0.86 : 0.58),
-    transactionIds: selected.filter((item) => item.type === "income" || item.type === "expense" || item.type === "refund").map((item) => item.id)
-  });
-  const categoryTotals = getCategoryTotals(selected);
-  const topCategory = categoryTotals[0];
-  if (topCategory) {
-    insights.push({
-      id: "largest-category",
-      title: `${topCategory.name} is the largest recorded spending category`,
-      explanation: `${topCategory.name} accounts for ${Math.round(topCategory.value / Math.max(analysis.totalExpenses, 1) * 100)}% of classified expense transactions.`,
-      evidence: `${topCategory.value.toFixed(2)} ${currency} from ${selected.filter((item) => item.type === "expense" && item.category === topCategory.name).length} transactions.`,
-      financialImpact: topCategory.value,
-      impactLabel: "Recorded category spend",
-      suggestedAction: "Review the transactions in this category and set a limit only if it supports your goals.",
-      confidence: 0.82,
-      confidenceLabel: "High",
-      transactionIds: selected.filter((item) => item.type === "expense" && item.category === topCategory.name).map((item) => item.id)
-    });
-  }
-  const largest = analysis.largestExpenses[0];
-  if (largest) {
-    insights.push({
-      id: "largest-expense",
-      title: "Largest individual purchase in the imported history",
-      explanation: `${largest.merchant || largest.description} was the largest single consumer outflow found.`,
-      evidence: `${largest.date} · ${Math.abs(largest.amount).toFixed(2)} ${currency} · ${largest.category}.`,
-      financialImpact: Math.abs(largest.amount),
-      impactLabel: "Single expense",
-      suggestedAction: "Check that the merchant and category are correct; manually recategorize if needed.",
-      confidence: 0.96,
-      confidenceLabel: "High",
-      transactionIds: [largest.id]
-    });
-  }
-  const latestChange = analysis.expenditureChanges.at(-1);
-  if (latestChange) {
-    insights.push({
-      id: "monthly-change",
-      title: latestChange.change > 0 ? "Monthly spending increased" : "Monthly spending decreased",
-      explanation: `Recorded expenditure changed ${latestChange.change >= 0 ? "by" : "by"} ${latestChange.change.toFixed(2)} ${currency} in ${monthName(latestChange.month)} compared with the prior month.`,
-      evidence: `${latestChange.previous.toFixed(2)} → ${latestChange.current.toFixed(2)} ${currency}${latestChange.changeRate === null ? "" : ` (${Math.round(latestChange.changeRate * 100)}%)`}.`,
-      financialImpact: Math.abs(latestChange.change),
-      impactLabel: "Month-over-month change",
-      suggestedAction: latestChange.change > 0 ? "Review the category breakdown to see whether this is a one-off or a continuing change." : "Confirm that the reduction reflects your intended plan.",
-      confidence: analysis.monthCount >= 3 ? 0.79 : 0.55,
-      confidenceLabel: confidenceLabel(analysis.monthCount >= 3 ? 0.79 : 0.55),
-      transactionIds: selected.filter((item) => monthKey(item.date) === latestChange.month).map((item) => item.id)
-    });
-  }
-  const recurring = analysis.recurringPayments[0];
-  if (recurring) {
-    insights.push({
-      id: "recurring-payment",
-      title: `${recurring.name} appears to be a recurring payment`,
-      explanation: `There are ${recurring.occurrenceCount} matching payments with an estimated ${recurring.cadence} cadence.`,
-      evidence: `Average payment ${recurring.averageAmount.toFixed(2)} ${currency}; estimated monthly amount ${recurring.monthlyAmount.toFixed(2)} ${currency}.`,
-      financialImpact: recurring.monthlyAmount,
-      impactLabel: "Estimated monthly commitment",
-      suggestedAction: "Confirm the schedule and amount with the biller before changing or cancelling it.",
-      confidence: recurring.confidence,
-      confidenceLabel: confidenceLabel(recurring.confidence),
-      transactionIds: recurring.transactionIds
-    });
-  }
-  const templates: Omit<FinancialInsight, "confidenceLabel">[] = [
-    {
-      id: "history-coverage",
-      title: "Imported history spans multiple months",
-      explanation: `The analysis covers ${analysis.monthCount} calendar month${analysis.monthCount === 1 ? "" : "s"} and ${selected.length} non-transfer transactions.`,
-      evidence: `Coverage: ${analysis.periodStart} through ${analysis.periodEnd}.`,
-      financialImpact: 0,
-      impactLabel: "No cash impact calculated",
-      suggestedAction: analysis.monthCount < 3 ? "Import more history to make trend and recurring-payment findings stronger." : "Keep importing monthly to maintain a current view.",
-      confidence: 0.88,
-      transactionIds: selected.map((item) => item.id)
-    },
-    {
-      id: "refunds",
-      title: "Refunds are kept distinct from earned income",
-      explanation: `${analysis.totalRefunds.toFixed(2)} ${currency} in refund or reversal transactions were identified and not counted as salary or ordinary income.`,
-      evidence: `${selected.filter((item) => item.type === "refund").length} refund/reversal transaction(s).`,
-      financialImpact: analysis.totalRefunds,
-      impactLabel: "Refunds recorded",
-      suggestedAction: "Check that refunds have matched the intended purchases; review unmatched credits separately.",
-      confidence: 0.8,
-      transactionIds: selected.filter((item) => item.type === "refund").map((item) => item.id)
-    },
-    {
-      id: "transaction-coverage",
-      title: "Analysis is based on imported transactions",
-      explanation: `${selected.length} non-transfer records in ${currency} were included; records outside the imported files are not visible.`,
-      evidence: `${selected.filter((item) => item.type === "expense").length} expenses, ${selected.filter((item) => item.type === "income").length} incomes, ${selected.filter((item) => item.type === "refund").length} refunds, and ${selected.filter((item) => item.type === "investment").length} investments.`,
-      financialImpact: 0,
-      impactLabel: "No cash impact calculated",
-      suggestedAction: "Import all relevant accounts and date ranges before using the results to make decisions.",
-      confidence: 0.99,
-      transactionIds: selected.map((item) => item.id)
-    }
-  ];
-  templates.forEach((insight) => insights.push({ ...insight, confidenceLabel: confidenceLabel(insight.confidence) }));
-  return insights.slice(0, 8);
-}
-
 function recurringFlowIncludesBill(flow: RecurringFlow, billName: string) {
   const bill = normalizedText(billName);
   const name = normalizedText(flow.name);
@@ -826,27 +583,55 @@ export function forecastCashFlow(
   };
 }
 
-export function calculatePortfolio(investments: Investment[], currency: string): PortfolioAnalysis {
-  const selected = investments.filter((investment) => investment.currency === currency);
-  const totalInvested = selected.reduce((sum, investment) => sum + investment.quantity * investment.purchasePrice, 0);
-  const currentValue = selected.reduce((sum, investment) => sum + investment.quantity * investment.currentPrice, 0);
-  const positions = selected.map((investment) => ({
-    id: investment.id,
-    name: investment.name,
-    ticker: investment.ticker,
-    value: investment.quantity * investment.currentPrice,
-    sharePercent: currentValue ? investment.quantity * investment.currentPrice / currentValue * 100 : 0
-  })).sort((a, b) => b.value - a.value);
-  return {
-    currency,
-    totalInvested,
-    currentValue,
-    unrealizedProfitLoss: currentValue - totalInvested,
-    returnPercent: totalInvested ? (currentValue - totalInvested) / totalInvested * 100 : 0,
-    allocation: positions
-  };
+
+export interface BalancePoint {
+  date: string;
+  balance: number;
 }
 
-export function buildBudgetRecord(category: TransactionCategory, monthlyLimit: number, actualSpending: number, id = category): Budget {
-  return { id, category, monthlyLimit: Math.max(0, monthlyLimit), actualSpending: Math.max(0, actualSpending) };
+export interface BalanceSeries {
+  currency: string;
+  openingBalance: number;
+  openingBalanceIsAssumed: boolean;
+  daily: BalancePoint[];
+  monthEnd: BalancePoint[];
+  lowestDay: BalancePoint | null;
+  lowestMonthEnd: BalancePoint | null;
+  closingBalance: number;
+}
+
+const roundMoney = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * Running balance from signed transaction amounts. The opening balance is a parameter:
+ * the code never invents one (default 0 means "balance relative to the start of the data").
+ * Daily points exist only for days with transactions; month-end points use the last day's balance of each month.
+ */
+/** Pass `account` to follow one account: merging the private account and the card double counts the card payment. */
+export function getBalanceSeries(transactions: Transaction[], currency: string, openingBalance = 0, account?: string): BalanceSeries {
+  const selected = transactions
+    .filter((item) => item.currency === currency && (!account || item.account === account))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const byDate = new Map<string, number>();
+  for (const item of selected) byDate.set(item.date, (byDate.get(item.date) ?? 0) + item.amount);
+  const daily: BalancePoint[] = [];
+  let running = openingBalance;
+  for (const [date, delta] of [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    running += delta;
+    daily.push({ date, balance: roundMoney(running) });
+  }
+  const lastOfMonth = new Map<string, BalancePoint>();
+  for (const point of daily) lastOfMonth.set(monthKey(point.date), point);
+  const monthEnd = [...lastOfMonth.values()];
+  const lowest = (points: BalancePoint[]) => points.reduce<BalancePoint | null>((min, point) => (!min || point.balance < min.balance ? point : min), null);
+  return {
+    currency,
+    openingBalance,
+    openingBalanceIsAssumed: openingBalance === 0,
+    daily,
+    monthEnd,
+    lowestDay: lowest(daily),
+    lowestMonthEnd: lowest(monthEnd),
+    closingBalance: daily.at(-1)?.balance ?? openingBalance
+  };
 }

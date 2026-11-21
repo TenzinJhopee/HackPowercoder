@@ -4,7 +4,7 @@ import { POST as respond } from "../app/api/agent/respond/route";
 import { GET as status } from "../app/api/agent/status/route";
 import { POST as speak } from "../app/api/voice/speak/route";
 import { POST as transcribe } from "../app/api/voice/transcribe/route";
-import { speakWithElevenLabs, transcribeWithElevenLabs } from "../lib/elevenlabs";
+import { speakWithElevenLabs, transcribeWithElevenLabs, wordsFromAlignment } from "../lib/elevenlabs";
 import { explainFinancialToolResult } from "../lib/llm/provider";
 
 const voiceEnvKeys = ["ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "OLLAMA_BASE_URL", "OLLAMA_MODEL"] as const;
@@ -49,18 +49,46 @@ test("transcription helper sends audio to ElevenLabs with scribe_v3", async () =
   assert.equal(text, "How much did I spend?");
 });
 
-test("speech helper requests multilingual mp3 audio", async () => {
+function timestampsPayload(text: string) {
+  const characters = [...text];
+  return {
+    audio_base64: Buffer.from([1, 2, 3]).toString("base64"),
+    alignment: {
+      characters,
+      character_start_times_seconds: characters.map((_, i) => i * 0.1),
+      character_end_times_seconds: characters.map((_, i) => i * 0.1 + 0.1)
+    },
+    normalized_alignment: null
+  };
+}
+
+test("wordsFromAlignment splits on spaces, strips edge punctuation and keeps char indices", () => {
+  const words = wordsFromAlignment(timestampsPayload("Merhaba, dünya!").alignment);
+  assert.deepEqual(words.map((w) => w.word), ["Merhaba", "dünya"]);
+  assert.deepEqual([words[0].charStart, words[0].charEnd, words[1].charStart, words[1].charEnd], [0, 8, 9, 15]);
+  assert.equal(words[0].start, 0);
+  assert.ok(Math.abs(words[0].end - 0.8) < 1e-9);
+});
+
+test("wordsFromAlignment skips pure punctuation and handles empty input", () => {
+  assert.deepEqual(wordsFromAlignment(timestampsPayload("a - b").alignment).map((w) => w.word), ["a", "b"]);
+  assert.deepEqual(wordsFromAlignment({ characters: [], character_start_times_seconds: [], character_end_times_seconds: [] }), []);
+});
+
+test("speech helper requests multilingual audio with timestamps", async () => {
   let endpoint = "";
   let requestBody = "";
-  const audio = await speakWithElevenLabs("Your verified result is ready.", "voice-1", "test-secret", async (input, init) => {
+  const speech = await speakWithElevenLabs("Hello world.", "voice-1", "test-secret", async (input, init) => {
     endpoint = String(input);
     requestBody = String(init?.body);
     assert.equal(new Headers(init?.headers).get("xi-api-key"), "test-secret");
-    return new Response(new Uint8Array([1, 2, 3]), { headers: { "Content-Type": "audio/mpeg" } });
+    return Response.json(timestampsPayload("Hello world."));
   });
-  assert.match(endpoint, /\/v1\/text-to-speech\/voice-1\?output_format=mp3_44100_128$/);
-  assert.deepEqual(JSON.parse(requestBody), { text: "Your verified result is ready.", model_id: "eleven_multilingual_v2" });
-  assert.equal(audio.byteLength, 3);
+  assert.match(endpoint, /\/v1\/text-to-speech\/voice-1\/with-timestamps\?output_format=mp3_44100_128$/);
+  assert.deepEqual(JSON.parse(requestBody), { text: "Hello world.", model_id: "eleven_multilingual_v2" });
+  assert.equal(speech.mimeType, "audio/mpeg");
+  assert.equal(speech.audioBase64, Buffer.from([1, 2, 3]).toString("base64"));
+  assert.deepEqual(speech.words.map((w) => w.word), ["Hello", "world"]);
 });
 
 test("speech API uses the default voice when only an API key is configured", async () => {
@@ -68,7 +96,7 @@ test("speech API uses the default voice when only an API key is configured", asy
     let endpoint = "";
     const restoreFetch = mockFetch(async (input) => {
       endpoint = String(input);
-      return new Response(new Uint8Array([1, 2, 3]), { headers: { "Content-Type": "audio/mpeg" } });
+      return Response.json(timestampsPayload("Hello"));
     });
     try {
       const response = await speak(new Request("http://localhost/api/voice/speak", {
@@ -77,7 +105,12 @@ test("speech API uses the default voice when only an API key is configured", asy
         body: JSON.stringify({ text: "Hello" })
       }));
       assert.equal(response.status, 200);
-      assert.match(endpoint, /\/21m00Tcm4TlvDq8ikWAM\?/);
+      assert.match(endpoint, /\/21m00Tcm4TlvDq8ikWAM\/with-timestamps\?/);
+      const body = await response.json();
+      assert.equal(body.mimeType, "audio/mpeg");
+      assert.equal(typeof body.audioBase64, "string");
+      assert.equal(body.words[0].word, "Hello");
+      assert.equal(body.alignment.characters.length, 5);
     } finally {
       restoreFetch();
     }

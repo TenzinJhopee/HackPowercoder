@@ -1,22 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createDemoTransactions } from "../lib/demo";
 import {
   analyzeTransactions,
-  applyClassificationRules,
   calculateBudget,
-  calculatePortfolio,
   classifyTransaction,
-  createSavingsPlan,
   deduplicateTransactions,
   forecastCashFlow,
+  getBalanceSeries,
   getLatestMonth,
-  getMonthlySummaries,
-  generateFinancialInsights,
   generateSavingsOpportunities,
   suggestBudgetLimits
 } from "../lib/intelligence";
-import type { Budget, Investment, Transaction } from "../lib/models";
+import type { Budget, Transaction } from "../lib/models";
 
 function transaction(overrides: Partial<Transaction> = {}): Transaction {
   return {
@@ -51,18 +46,6 @@ test("classifies common merchants and respects configurable keyword rules", () =
   }]), "Food");
 });
 
-test("manual categories are preserved when automated rules are applied", () => {
-  const manual = transaction({ category: "Restaurants", categorySource: "manual", merchant: "Migros" });
-  const result = applyClassificationRules([manual], [{
-    id: "food-rule",
-    keyword: "migros",
-    category: "Food",
-    matchOn: "merchant",
-    enabled: true
-  }]);
-  assert.equal(result[0].category, "Restaurants");
-  assert.equal(result[0].categorySource, "manual");
-});
 
 test("calculates income, net expenses, savings, and cash flow without counting transfers", () => {
   const rows = [
@@ -120,19 +103,6 @@ test("calculates budgets and suggests a limit from observed historical months", 
   assert.equal(suggestions[0].actualSpending, 300);
 });
 
-test("creates a savings plan from observed income and explains recurring savings assumptions", () => {
-  const rows: Transaction[] = [];
-  for (const [month, day] of [["01", "05"], ["02", "05"], ["03", "05"]]) {
-    rows.push(transaction({ id: `salary-${month}`, date: `2025-${month}-${day}`, amount: 1000, originalAmount: 1000, type: "income", category: "Income", merchant: "Employer" }));
-    rows.push(transaction({ id: `subscription-${month}`, date: `2025-${month}-15`, amount: -20, originalAmount: 20, type: "expense", category: "Subscriptions", merchant: "Stream service" }));
-  }
-  const plan = createSavingsPlan(rows, "CHF", { currency: "CHF", monthlyAmount: 1200 });
-  assert.equal(plan.currentMonthlySavings, 980);
-  assert.equal(plan.targetGap, 220);
-  assert.equal(plan.actions[0].monthlySavings, 4);
-  assert.match(plan.actions[0].assumption, /20%/);
-});
-
 test("adds a qualified optional savings review when recurring evidence yields fewer than three actions", () => {
   const rows: Transaction[] = [];
   for (const month of ["01", "02", "03"]) {
@@ -148,33 +118,6 @@ test("adds a qualified optional savings review when recurring evidence yields fe
   assert.equal(optionalReview.monthlySavings, 10);
   assert.match(optionalReview.assumption, /Illustrative savings/);
   assert.ok(optionalReview.confidence < 0.6);
-});
-
-test("demo data covers a 12-month window, is clearly marked, and supports three qualified opportunities", () => {
-  const demo = createDemoTransactions();
-  assert.ok(demo.length > 0);
-  assert.ok(demo.every((item) => item.description.includes("DEMO DATA")));
-  const latest = getLatestMonth(demo);
-  const previousMonth = new Date();
-  previousMonth.setDate(1);
-  previousMonth.setMonth(previousMonth.getMonth() - 1);
-  assert.equal(latest, `${previousMonth.getFullYear()}-${String(previousMonth.getMonth() + 1).padStart(2, "0")}`);
-  assert.equal(getMonthlySummaries(demo, "CHF", latest).length, 12);
-  assert.equal(generateSavingsOpportunities(demo, "CHF").slice(0, 3).length, 3);
-});
-
-test("calculates investment return and currency-specific allocation from entered prices", () => {
-  const holdings: Investment[] = [
-    { id: "a", ticker: "ABC", name: "Alpha", quantity: 2, purchasePrice: 100, currentPrice: 125, currency: "CHF", purchaseDate: "2024-01-01", priceSource: "manual" },
-    { id: "b", ticker: "XYZ", name: "Beta", quantity: 1, purchasePrice: 200, currentPrice: 180, currency: "CHF", purchaseDate: "2024-02-01", priceSource: "manual" },
-    { id: "c", ticker: "EUR", name: "Euro holding", quantity: 1, purchasePrice: 100, currentPrice: 150, currency: "EUR", purchaseDate: "2024-03-01", priceSource: "manual" }
-  ];
-  const result = calculatePortfolio(holdings, "CHF");
-  assert.equal(result.totalInvested, 400);
-  assert.equal(result.currentValue, 430);
-  assert.equal(result.unrealizedProfitLoss, 30);
-  assert.equal(result.returnPercent, 7.5);
-  assert.equal(result.allocation[0].ticker, "ABC");
 });
 
 test("forecasts net flows using recurring payments, variable spending, and known bills", () => {
@@ -199,17 +142,22 @@ test("forecasts net flows using recurring payments, variable spending, and known
   assert.ok(forecast.assumptions.some((item) => item.includes("no starting balance")));
 });
 
-test("produces at least five evidence-backed insights for imported activity", () => {
-  const insights = generateFinancialInsights([
-    transaction({ id: "food", category: "Food", merchant: "Market" }),
-    transaction({ id: "rent", category: "Housing", merchant: "Rent", amount: -900, originalAmount: 900 })
-  ], "CHF");
-  assert.ok(insights.length >= 5);
-  for (const insight of insights) {
-    assert.ok(insight.title.length > 0);
-    assert.ok(insight.explanation.length > 0);
-    assert.ok(insight.evidence.length > 0);
-    assert.ok(insight.suggestedAction.length > 0);
-    assert.ok(insight.confidence >= 0 && insight.confidence <= 1);
-  }
+test("balance series is a running total from a given opening balance and finds the lowest points", () => {
+  const rows = [
+    transaction({ id: "a", date: "2025-08-31", amount: 100, originalAmount: 100, type: "income" }),
+    transaction({ id: "b", date: "2025-09-10", amount: -300, originalAmount: 300 }),
+    transaction({ id: "c", date: "2025-09-30", amount: -50, originalAmount: 50 }),
+    transaction({ id: "d", date: "2025-10-05", amount: 1000, originalAmount: 1000, type: "income" }),
+    transaction({ id: "e", date: "2025-10-06", amount: -5, originalAmount: 5, currency: "EUR" })
+  ];
+  const series = getBalanceSeries(rows, "CHF", 200);
+  assert.deepEqual(series.monthEnd, [
+    { date: "2025-08-31", balance: 300 },
+    { date: "2025-09-30", balance: -50 },
+    { date: "2025-10-05", balance: 950 }
+  ]);
+  assert.deepEqual(series.lowestMonthEnd, { date: "2025-09-30", balance: -50 });
+  assert.deepEqual(series.lowestDay, { date: "2025-09-30", balance: -50 });
+  assert.equal(series.closingBalance, 950);
+  assert.equal(getBalanceSeries(rows, "CHF").openingBalanceIsAssumed, true);
 });
