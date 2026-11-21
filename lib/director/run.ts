@@ -5,7 +5,8 @@ import type { Transaction } from "@/lib/models";
 import { describeError, generateScript, type GenerateOutput } from "./claude";
 import { buildDataBlock, buildUserMessage, DIRECTOR_INSTRUCTIONS } from "./prompt";
 import { buildSeries, seriesNumbers } from "./series";
-import { validateScript } from "./validate";
+import { stageScript } from "./staging";
+import { extractNumbers, validateScript } from "./validate";
 
 export function fallbackResponse(error: string): DirectorResponse {
   return { script: [{ say: DIRECTOR_FAILURE_LINE }], source: "fallback", error };
@@ -52,6 +53,9 @@ export async function runDirector(input: DirectorInput): Promise<DirectorRespons
     );
 
     const allowed = allowedNumbers(facts);
+    // Numbers she says herself ("I need to save 100 francs") may be repeated back, and are the only savings amount besides the offer.
+    const questionNumbers = extractNumbers(input.request.question);
+    for (const value of questionNumbers) allowed.add(value);
     for (const value of [...seriesNumbers(series), ...numbersIn(input.request.screen.visible)]) {
       allowed.add(value);
       allowed.add(Math.round(value));
@@ -64,10 +68,17 @@ export async function runDirector(input: DirectorInput): Promise<DirectorRespons
       allowed,
       monthTotals: series.monthlySpending,
       toolResults: output.toolResults,
+      savingsAllowed: [...questionNumbers, facts.offer.monthly, facts.offer.after_one_year],
       allowOffer: !facts.insights.some((i) => i.id === "no_pillar_3a" && i.mode === "resolved" && i.userAnswer === "has_elsewhere")
     });
     if (!result.ok) return fallbackResponse(result.error);
-    return { script: result.script, source: "model" };
+    const script = stageScript(result.script, {
+      currentScene: input.request.screen.scene,
+      currentFocus: input.request.screen.focus,
+      tags: input.tags,
+      userNumbers: questionNumbers
+    });
+    return { script, source: "model" };
   } catch (error) {
     return fallbackResponse(describeError(error));
   }

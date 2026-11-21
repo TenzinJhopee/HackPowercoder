@@ -6,7 +6,7 @@ import { GalaxyScene } from "./scenes/galaxy";
 import { JarsScene, jarName } from "./scenes/jars";
 import { LevelScene } from "./scenes/level";
 import { MonthlyScene } from "./scenes/monthly";
-import { PoolsScene } from "./scenes/pools";
+import { PoolsScene, type NecessityData, type NecessityKey } from "./scenes/pools";
 
 const ALIASES: Record<string, string[]> = {
   Housing: ["rent", "electricity", "flat", "apartment", "bkw"],
@@ -50,6 +50,8 @@ export class GrainWorld implements World {
   private focusCount = 0;
   private choreo: ChoreoName | null = null;
   private effectLog: string[] = [];
+  /** Which group is fixed / adjustable / flexible, from /api/facts (loaded once, read-only). */
+  private necessity: NecessityData | null = null;
 
   currentScene(): SceneType | null {
     return this.type;
@@ -160,7 +162,24 @@ export class GrainWorld implements World {
     this.run("resize");
   }
 
+  /** Fills `necessity` from /api/profile (groups[].necessity, byNecessity); failures leave the necessity targets unknown. */
+  private loadNecessity(): void {
+    fetch("/api/profile")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`profile: ${res.status}`))))
+      .then((profile: { byNecessity?: Record<string, { monthly: number }>; groups?: { group: string; necessity: string }[] }) => {
+        const names: Record<string, NecessityKey> = { compulsory: "Fixed", reducible: "Adjustable", discretionary: "Flexible" };
+        const monthly = { Fixed: 0, Adjustable: 0, Flexible: 0 } as Record<NecessityKey, number>;
+        for (const [name, key] of Object.entries(names)) monthly[key] = profile.byNecessity?.[name]?.monthly ?? 0;
+        const groups: Record<string, NecessityKey> = {};
+        for (const g of profile.groups ?? []) if (names[g.necessity]) groups[g.group] = names[g.necessity];
+        this.necessity = { groups, monthly };
+        if (this.scene instanceof PoolsScene) this.scene.setNecessityData(this.necessity);
+      })
+      .catch((error) => console.warn("Grain world: could not load necessity data", error));
+  }
+
   private load(): Promise<void> {
+    this.loadNecessity();
     this.loading ??= fetch("/facts.json")
       .then((res) => {
         if (!res.ok) throw new Error(`facts.json: ${res.status}`);
@@ -191,6 +210,7 @@ export class GrainWorld implements World {
 
   private make(type: SceneType, env: SceneEnv): Scene {
     const scene = this.makeScene(type, env);
+    if (scene instanceof PoolsScene) scene.setNecessityData(this.necessity);
     scene.entrance = this.choreo ? { name: this.choreo, pivot: null } : null;
     return scene;
   }
