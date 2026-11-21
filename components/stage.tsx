@@ -43,12 +43,20 @@ function FigureCounter({ change }: { change: FigureChange | null }) {
     return () => cancelAnimationFrame(raf);
   }, [change]);
 
-  const tone = change && change.to.value < 0 ? "text-coral-ink" : "text-ink";
+  const negative = change !== null && change.to.value < 0;
+  const tone = negative ? "text-coral-ink" : "text-ink";
+  // Re-keyed on every change so the marker sweep, the label and the landing thump play again.
+  const seq = change?.seq ?? 0;
   return (
     <div className="min-h-[5.25rem] lg:min-h-[7.25rem]">
-      <p className="min-h-[1.25rem] text-[11px] font-bold uppercase tracking-[0.15em] text-faint">{change?.to.label ?? " "}</p>
-      <p className={`text-5xl font-semibold tabular-nums leading-tight sm:text-6xl lg:text-7xl ${tone}`} aria-live="off">
-        {shown === null ? "–" : swiss(shown)}
+      <p key={`label-${seq}`} className="fig-label min-h-[1.25rem] text-[11px] font-bold uppercase tracking-[0.15em] text-faint">
+        {change?.to.label ?? " "}
+      </p>
+      <p key={`number-${seq}`} className={`fig-pop text-5xl font-semibold tabular-nums leading-tight sm:text-6xl lg:text-7xl ${tone}`} aria-live="off">
+        <span className="relative inline-block">
+          {shown !== null && <span aria-hidden="true" className={`fig-marker absolute inset-x-0 bottom-[0.1em] h-[0.26em] rounded-sm ${negative ? "bg-coral/45" : "bg-sun"}`} />}
+          <span className="relative">{shown === null ? "\u2013" : swiss(shown)}</span>
+        </span>
       </p>
     </div>
   );
