@@ -82,7 +82,7 @@ async function GET() {
     } catch  {
         return Response.json({
             connected: false,
-            model: process.env.OLLAMA_MODEL?.trim() || "MichelRosselli/apertus:latest"
+            model: process.env.OLLAMA_MODEL?.trim() || "qwen2.5:3b"
         }, {
             headers: {
                 "Cache-Control": "no-store"
@@ -102,7 +102,7 @@ const financialAgentSystemPrompt = `You are the PostFinance Financial Intelligen
 
 Use only the deterministic tool result included with the current question for personal financial facts. Do not infer or invent transactions, amounts, account balances, investment prices, returns, or performance. Internal transfers are excluded from income and spending. Refunds are not earned income. Currency totals are separate unless the tool explicitly says otherwise. Forecasts are estimates, never guaranteed balances.
 
-Write in natural, fluent conversational English and answer the user's question directly. Avoid robotic or canned introductions, and do not mention tools, models, or that figures are shown elsewhere. Explain the result in plain language, name important assumptions and uncertainty, and suggest practical next steps without pressure. For brainstorming requests such as affordable meal ideas, offer a few practical options using common ingredients, use unnumbered bullets, omit prices and financial estimates, and ask about dietary needs when relevant. Treat these ideas as general suggestions, not facts about the user's purchases. If required information is absent, say so and ask a concise clarifying question when useful.
+Write in natural, fluent conversational English and answer the user's question directly. Avoid robotic or canned introductions, and do not mention tools, models, or that figures are shown elsewhere. Explain the result in plain language, name important assumptions and uncertainty, and suggest practical next steps without pressure. Never offer to execute financial actions, move money, or change an account; the application cannot do those things. For brainstorming requests such as affordable meal ideas, offer a few practical options using common ingredients, use unnumbered bullets, omit prices and financial estimates, and ask about dietary needs when relevant. Treat these ideas as general suggestions, not facts about the user's purchases. If required information is absent, say so and ask a concise clarifying question when useful.
 
 The application separately displays the exact verified figures from its local calculation. In your response, provide a short explanation of what those figures mean; do not repeat or create numbers, currencies, percentages, dates, merchant names, or performance claims.`;
 }),
@@ -139,7 +139,7 @@ const localProviderHosts = new Set([
     "[::1]",
     "::1"
 ]);
-const defaultModel = "MichelRosselli/apertus:latest";
+const defaultModel = "qwen2.5:3b";
 class LlmProviderError extends Error {
     constructor(){
         super("The local Ollama provider could not complete the request.");
@@ -229,13 +229,12 @@ async function explainFinancialToolResult(question, tool, toolResult) {
         throw new LlmProviderError();
     }
     if (!content || content.length > 2000) throw new LlmProviderError();
-    const isBrainstorm = /\b(brainstorm|ideas?|suggest(?:ion)?s?|meal|recipe|food)\b/i.test(question);
-    const hasFinancialFigure = /(?:\b(?:CHF|EUR|USD)\s*[\d,.]+|[\d,.]+\s*\b(?:CHF|EUR|USD|francs?|euros?|dollars?)\b|[$€£]\s*[\d,.]+|%|percent|(?:save|savings|spend|spending|cost|price|budget|income|expense|profit|loss|return)\b.{0,40}\d|\d.{0,40}\b(?:save|savings|spend|spending|cost|price|budget|income|expense|profit|loss|return)\b)/i.test(content);
-    const hasUnverifiedNumber = /\d|%|CHF|EUR|USD|francs?|euros?|dollars?|\b(one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand|million|percent)\b/i.test(content);
-    if (hasFinancialFigure || !isBrainstorm && hasUnverifiedNumber) {
-        return "Here’s what your records show.";
-    }
-    return content;
+    const numberWords = "one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand|million";
+    const measurableUnits = "days?|weeks?|months?|years?|transactions?|categories|payments?|subscriptions?|percent(?:age)?|per cent|francs?|euros?|dollars?";
+    const unsupportedFigure = new RegExp(`(?:\\d|%|\\b(?:CHF|EUR|USD|francs?|euros?|dollars?)\\b|\\b(?:${numberWords})\\s+(?:\\w+\\s+){0,2}(?:${measurableUnits})\\b)`, "i");
+    const unsupportedActionOffer = /\b(?:would you like|do you want|shall i)\b.*\b(?:set up|transfer|move|change|cancel|manage|pay)\b|^\s*if so,?\s*(?:i can|i will|i'll)\b/i;
+    const safeNarrative = content.split(/(?<=[.!?])\s+/).filter((sentence)=>!unsupportedFigure.test(sentence) && !unsupportedActionOffer.test(sentence)).join(" ").trim();
+    return safeNarrative || "Here’s what your records show.";
 }
 }),
 ];

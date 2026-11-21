@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { executeFinancialTool, selectFinancialTool } from "../lib/financial-agent";
 import { create_budget, get_monthly_spending, get_spending_by_category } from "../lib/financial-tools";
+import { formatMoney } from "../lib/finance";
+import { createFinancialVisualization } from "../lib/financial-visualization";
 import { microphoneErrorMessage } from "../lib/voice-errors";
 import type { Budget, Transaction } from "../lib/models";
 
@@ -58,6 +60,43 @@ test("financial tools calculate selected-currency spending without mixing curren
     netCashFlow: -70
   });
   assert.equal(get_spending_by_category(rows, "CHF").categories[0].value, 80);
+});
+
+test("category answer visuals use verified totals and group smaller categories", () => {
+  const visualization = createFinancialVisualization("get_spending_by_category", {
+    month: "2026-10",
+    categories: [
+      { name: "Housing", value: 1200 },
+      { name: "Food", value: 500 },
+      { name: "Transport", value: 300 },
+      { name: "Shopping", value: 250 },
+      { name: "Health", value: 100 },
+      { name: "Subscriptions", value: 50 }
+    ]
+  }, "CHF");
+  assert.equal(visualization?.stats[0].value, formatMoney(2400, "CHF"));
+  assert.deepEqual(visualization?.chart?.points, [
+    { label: "Housing", value: 1200 },
+    { label: "Food", value: 500 },
+    { label: "Transport", value: 300 },
+    { label: "Shopping", value: 250 },
+    { label: "Health", value: 100 },
+    { label: "Other categories", value: 50 }
+  ]);
+});
+
+test("forecast answer visuals preserve negative net flow and show forecast periods", () => {
+  const visualization = createFinancialVisualization("get_cashflow_forecast", {
+    horizons: [
+      { days: 30, projectedIncome: 2500, projectedExpenses: 2800, projectedNetFlow: -300, knownBills: 100 },
+      { days: 90, projectedIncome: 7500, projectedExpenses: 8200, projectedNetFlow: -700, knownBills: 250 }
+    ]
+  }, "CHF");
+  assert.deepEqual(visualization?.stats.slice(0, 2).map((stat) => stat.label), ["30-day net flow", "90-day net flow"]);
+  assert.deepEqual(visualization?.chart?.points, [
+    { label: "30 days", income: 2500, expenses: 2800, netFlow: -300 },
+    { label: "90 days", income: 7500, expenses: 8200, netFlow: -700 }
+  ]);
 });
 
 test("create-budget requests return historical suggestions and preserve existing limits", () => {

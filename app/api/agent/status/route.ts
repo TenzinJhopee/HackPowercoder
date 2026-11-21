@@ -9,7 +9,7 @@ export async function GET() {
   } catch {
     return Response.json({
       connected: false,
-      model: process.env.OLLAMA_MODEL?.trim() || "MichelRosselli/apertus:latest"
+      model: process.env.OLLAMA_MODEL?.trim() || "qwen2.5:3b"
     }, { headers: { "Cache-Control": "no-store" } });
   }
 }

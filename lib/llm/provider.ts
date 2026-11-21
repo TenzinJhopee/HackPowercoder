@@ -10,7 +10,7 @@ const tagsResponseSchema = z.object({
 });
 
 const localProviderHosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
-const defaultModel = "MichelRosselli/apertus:latest";
+const defaultModel = "qwen2.5:3b";
 
 export class LlmProviderError extends Error {
   constructor() {
@@ -87,11 +87,17 @@ export async function explainFinancialToolResult(question: string, tool: Financi
   }
   if (!content || content.length > 2000) throw new LlmProviderError();
 
-  const isBrainstorm = /\b(brainstorm|ideas?|suggest(?:ion)?s?|meal|recipe|food)\b/i.test(question);
-  const hasFinancialFigure = /(?:\b(?:CHF|EUR|USD)\s*[\d,.]+|[\d,.]+\s*\b(?:CHF|EUR|USD|francs?|euros?|dollars?)\b|[$€£]\s*[\d,.]+|%|percent|(?:save|savings|spend|spending|cost|price|budget|income|expense|profit|loss|return)\b.{0,40}\d|\d.{0,40}\b(?:save|savings|spend|spending|cost|price|budget|income|expense|profit|loss|return)\b)/i.test(content);
-  const hasUnverifiedNumber = /\d|%|CHF|EUR|USD|francs?|euros?|dollars?|\b(one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand|million|percent)\b/i.test(content);
-  if (hasFinancialFigure || (!isBrainstorm && hasUnverifiedNumber)) {
-    return "Here’s what your records show.";
-  }
-  return content;
+  const numberWords = "one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand|million";
+  const measurableUnits = "days?|weeks?|months?|years?|transactions?|categories|payments?|subscriptions?|percent(?:age)?|per cent|francs?|euros?|dollars?";
+  const unsupportedFigure = new RegExp(
+    `(?:\\d|%|\\b(?:CHF|EUR|USD|francs?|euros?|dollars?)\\b|\\b(?:${numberWords})\\s+(?:\\w+\\s+){0,2}(?:${measurableUnits})\\b)`,
+    "i"
+  );
+  const unsupportedActionOffer = /\b(?:would you like|do you want|shall i)\b.*\b(?:set up|transfer|move|change|cancel|manage|pay)\b|^\s*if so,?\s*(?:i can|i will|i'll)\b/i;
+  const safeNarrative = content
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !unsupportedFigure.test(sentence) && !unsupportedActionOffer.test(sentence))
+    .join(" ")
+    .trim();
+  return safeNarrative || "Here’s what your records show.";
 }

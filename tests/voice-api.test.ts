@@ -225,7 +225,28 @@ test("agent endpoint sends verified context to local Ollama and accepts narrativ
   });
 });
 
-test("Ollama defaults to the requested local Apertus model without an API key", async () => {
+test("Ollama keeps useful advice when removing unsupported numeric claims", async () => {
+  await withEnv({ OLLAMA_BASE_URL: "http://127.0.0.1:11434", OLLAMA_MODEL: "test-model" }, async () => {
+    const restoreFetch = mockFetch(async () => Response.json({
+      message: {
+        content: "For October 2026, your cash flow was $800. One practical step is to review recurring subscriptions and cancel any you no longer use. Would you like to set up an automatic transfer now? If so, I can guide you through the process."
+      },
+      done: true
+    }));
+    try {
+      const explanation = await explainFinancialToolResult(
+        "Review this month's spending and suggest a practical next step.",
+        "get_monthly_spending",
+        JSON.stringify({ month: "2026-10", income: 3000, netExpenses: 2200, netCashFlow: 800, currency: "CHF" })
+      );
+      assert.equal(explanation, "One practical step is to review recurring subscriptions and cancel any you no longer use.");
+    } finally {
+      restoreFetch();
+    }
+  });
+});
+
+test("Ollama defaults to the installed local Qwen model without an API key", async () => {
   await withEnv({ OLLAMA_MODEL: "", OLLAMA_BASE_URL: "" }, async () => {
     let requestBody = "";
     const restoreFetch = mockFetch(async (input, init) => {
@@ -241,7 +262,7 @@ test("Ollama defaults to the requested local Apertus model without an API key", 
         JSON.stringify([])
       );
       const request = JSON.parse(requestBody);
-      assert.equal(request.model, "MichelRosselli/apertus:latest");
+      assert.equal(request.model, "qwen2.5:3b");
       assert.match(request.messages[0].content, /affordable meal ideas/i);
       assert.match(explanation ?? "", /vegetable soup/i);
     } finally {
@@ -251,7 +272,7 @@ test("Ollama defaults to the requested local Apertus model without an API key", 
 });
 
 test("Ollama refuses cloud endpoints", async () => {
-  await withEnv({ OLLAMA_BASE_URL: "https://example.com", OLLAMA_MODEL: "MichelRosselli/apertus:latest" }, async () => {
+  await withEnv({ OLLAMA_BASE_URL: "https://example.com", OLLAMA_MODEL: "qwen2.5:3b" }, async () => {
     let requested = false;
     const restoreFetch = mockFetch(async () => {
       requested = true;
@@ -270,14 +291,14 @@ test("Ollama refuses cloud endpoints", async () => {
 });
 
 test("Ollama status requires both a reachable server and the configured model", async () => {
-  await withEnv({ OLLAMA_BASE_URL: "http://localhost:11434", OLLAMA_MODEL: "MichelRosselli/apertus:latest" }, async () => {
+  await withEnv({ OLLAMA_BASE_URL: "http://localhost:11434", OLLAMA_MODEL: "qwen2.5:3b" }, async () => {
     const restoreFetch = mockFetch(async (input) => {
       assert.equal(String(input), "http://localhost:11434/api/tags");
-      return Response.json({ models: [{ name: "MichelRosselli/apertus:latest" }] });
+      return Response.json({ models: [{ name: "qwen2.5:3b" }] });
     });
     try {
       const response = await status();
-      assert.deepEqual(await response.json(), { connected: true, model: "MichelRosselli/apertus:latest" });
+      assert.deepEqual(await response.json(), { connected: true, model: "qwen2.5:3b" });
     } finally {
       restoreFetch();
     }

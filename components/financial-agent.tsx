@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AudioLines, Bot, LoaderCircle, Mic, Plus, Send, ShieldCheck, Sparkles, Square, Volume2 } from "lucide-react";
+import { FinancialAnswerVisual } from "@/components/financial-answer-visual";
 import { create_budget } from "@/lib/financial-tools";
 import { executeFinancialTool, selectFinancialTool } from "@/lib/financial-agent";
 import { formatMoney } from "@/lib/finance";
+import { createFinancialVisualization } from "@/lib/financial-visualization";
+import type { FinancialVisualization } from "@/lib/financial-visualization";
 import { microphoneErrorMessage } from "@/lib/voice-errors";
 import type { Budget, Investment, Transaction, UpcomingBill } from "@/lib/models";
 import type { FinancialToolName } from "@/lib/financial-agent";
@@ -14,6 +17,7 @@ interface ChatMessage {
   role: "assistant" | "user";
   text: string;
   verifiedAnswer?: string;
+  visualization?: FinancialVisualization;
   tool?: FinancialToolName;
   audioUrl?: string;
 }
@@ -147,7 +151,7 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
         const status = await response.json() as OllamaStatus;
         if (active) setOllamaStatus(status);
       } catch {
-        if (active) setOllamaStatus({ connected: false, model: "MichelRosselli/apertus:latest" });
+        if (active) setOllamaStatus({ connected: false, model: "qwen2.5:3b" });
       }
     };
     void refreshStatus();
@@ -187,6 +191,7 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
         await onCreateBudgets(draft.budgets);
       } else result = executeFinancialTool(tool, context);
       const verifiedAnswer = formatToolAnswer(tool, result, currency);
+      const visualization = createFinancialVisualization(tool, result, currency);
       let explanation = "Here’s what I found.";
 
       if (sharingConsent) {
@@ -214,6 +219,7 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
         role: "assistant",
         text: explanation,
         verifiedAnswer,
+        visualization,
         tool
       };
       setMessages((current) => [...current, assistantMessage]);
@@ -355,7 +361,7 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ollamaStatus?.connected ? "bg-emerald-300 shadow-[0_0_10px_2px_rgba(110,255,181,0.4)]" : "bg-rose-300"}`} />
             <span className="min-w-0">
               <span className="block font-semibold">{ollamaStatus ? (ollamaStatus.connected ? "Connected" : "Disconnected") : "Checking Ollama"}</span>
-              <span className="block truncate text-[8px] text-white/45 sm:text-[9px]">{ollamaStatus?.model ?? "MichelRosselli/apertus:latest"}</span>
+              <span className="block truncate text-[8px] text-white/45 sm:text-[9px]">{ollamaStatus?.model ?? "qwen2.5:3b"}</span>
             </span>
           </span>
         </div>
@@ -379,6 +385,7 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
                     <article className={`max-w-[94%] rounded-2xl px-4 py-3 sm:max-w-[88%] ${message.role === "user" ? "rounded-br-md border border-violet-300/20 bg-violet-500/15 text-white" : "rounded-bl-md border border-white/5 bg-white/[0.04] text-white/85"}`}>
                       <div className="mb-1.5 flex items-center gap-2 text-[10px] font-semibold text-white/45">{message.role === "user" ? "You" : <><Bot size={12} /> Luma</>}</div>
                       <p className="whitespace-pre-line text-sm leading-6">{message.text}</p>
+                      {message.visualization && <FinancialAnswerVisual currency={currency} visualization={message.visualization} />}
                       {message.verifiedAnswer && <div className="mt-3 whitespace-pre-line rounded-xl border border-emerald-300/15 bg-emerald-300/[0.05] p-3 text-xs leading-5 text-white/75"><p className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200"><ShieldCheck size={12} /> Verified local calculation · {message.tool?.replaceAll("_", " ")}</p>{message.verifiedAnswer}</div>}
                       {message.role === "assistant" && message.verifiedAnswer && (
                         <div className="mt-3">
