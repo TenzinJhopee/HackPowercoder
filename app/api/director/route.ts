@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { sceneTypes, type DirectorRequest } from "@/lib/contracts";
 import { getMerchantTags, getTransactions, getUserNotes } from "@/lib/database";
+import { generateScriptOpenRouter } from "@/lib/director/openrouter";
 import { fallbackResponse, runDirector } from "@/lib/director/run";
 
 export const runtime = "nodejs";
@@ -26,10 +27,19 @@ export async function POST(request: Request) {
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid director request.", issues: parsed.error.issues }, { status: 400, headers });
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  // OpenRouter (e.g. Gemini) when OPENROUTER_API_KEY is set, otherwise Claude via ANTHROPIC_API_KEY.
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = openRouterKey || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return Response.json(fallbackResponse("not_configured"), { headers });
 
   const [transactions, tags, notes] = await Promise.all([getTransactions(), getMerchantTags(), getUserNotes()]);
-  const response = await runDirector({ request: parsed.data as DirectorRequest, transactions, tags, notes, apiKey });
+  const response = await runDirector({
+    request: parsed.data as DirectorRequest,
+    transactions,
+    tags,
+    notes,
+    apiKey,
+    generate: openRouterKey ? generateScriptOpenRouter : undefined
+  });
   return Response.json(response, { headers });
 }
