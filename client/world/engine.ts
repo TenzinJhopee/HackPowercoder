@@ -67,7 +67,9 @@ function ease(code: number, t: number): number {
 
 export type Motion =
   | { kind: "orbit"; cx: number; cy: number; radius: number; angle: number; speed: number; since: number }
-  | { kind: "flow"; x: number; spread: number; top: number; bottom: number; offset: number; speed: number; since: number };
+  | { kind: "flow"; x: number; spread: number; top: number; bottom: number; offset: number; speed: number; since: number }
+  /** A slow wander of up to `amp` around a fixed slot (two mixed sines per axis, never leaving the slot's room). */
+  | { kind: "wander"; x: number; y: number; amp: number; phase: number; speed: number; since: number };
 
 export type Grain = {
   id: number;
@@ -153,6 +155,7 @@ function sameMotion(a: Motion | null, b: Motion | null): boolean {
   if (!a || !b) return a === b;
   if (a.kind === "orbit" && b.kind === "orbit") return near(a.cx, b.cx) && near(a.cy, b.cy) && near(a.radius, b.radius);
   if (a.kind === "flow" && b.kind === "flow") return near(a.x, b.x) && near(a.top, b.top) && near(a.bottom, b.bottom);
+  if (a.kind === "wander" && b.kind === "wander") return near(a.x, b.x) && near(a.y, b.y) && Math.abs(a.amp - b.amp) < 0.1;
   return false;
 }
 
@@ -163,6 +166,12 @@ function motionPoint(m: Motion, now: number): typeof point {
     const angle = m.angle + m.speed * t;
     point.x = m.cx + Math.cos(angle) * m.radius;
     point.y = m.cy + Math.sin(angle) * m.radius;
+    point.fade = 1;
+  } else if (m.kind === "wander") {
+    const w = m.speed * t;
+    const p = m.phase;
+    point.x = m.x + m.amp * (0.7 * Math.sin(w + p) + 0.3 * Math.sin(2.3 * w + 1.9 * p));
+    point.y = m.y + m.amp * (0.7 * Math.sin(1.31 * w + 2.7 * p) + 0.3 * Math.sin(1.9 * w + 0.6 * p));
     point.fade = 1;
   } else {
     const span = m.bottom - m.top;

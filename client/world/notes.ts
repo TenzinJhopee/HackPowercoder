@@ -222,7 +222,7 @@ export class NoteRenderer {
           flutter = Math.sin(Math.PI * p);
           settle = 120;
         }
-      } else if (m?.kind === "orbit") {
+      } else if (m?.kind === "orbit" || m?.kind === "wander") {
         target = rest + 0.12 * Math.sin(now * 0.0005 + this.phase[id]);
       } else if (m?.kind === "flow") {
         // Same swing as the engine's flow path: x = m.x + sin(y * 0.035 + offset) * spread. Tilt with its slope.
