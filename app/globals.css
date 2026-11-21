@@ -94,39 +94,13 @@ button {
 .fig-pop { transform-origin: left center; animation: fig-pop 0.42s ease-out 1.05s; }
 .fig-label { animation: fig-label 0.4s ease-out both; }
 
-/* Apple and arrow (components/apple-hit.tsx): the arrow flies in and pierces the apple, which wobbles */
-.ah-arrow, .ah-apple { transform-box: fill-box; transform-origin: center; }
-@keyframes ah-fly-loop {
-  0% { transform: translate(30px, -24px); opacity: 0; }
-  10% { opacity: 1; }
-  24%, 78% { transform: translate(0, 0); opacity: 1; }
-  92%, 100% { transform: translate(0, 0); opacity: 0; }
-}
-@keyframes ah-fly-once {
-  0% { transform: translate(30px, -24px); opacity: 0; }
-  12% { opacity: 1; }
-  100% { transform: translate(0, 0); opacity: 1; }
-}
-@keyframes ah-wobble {
-  0%, 22% { transform: scale(1) rotate(0); }
-  29% { transform: scale(1.14, 0.88) rotate(-5deg); }
-  40% { transform: scale(0.96, 1.05) rotate(4deg); }
-  52% { transform: scale(1.03, 0.98) rotate(-2deg); }
-  64%, 100% { transform: scale(1) rotate(0); }
-}
-.ah-loop .ah-arrow { animation: ah-fly-loop 2.4s ease-out infinite; }
-.ah-loop .ah-apple { animation: ah-wobble 2.4s ease-in-out infinite; }
-.ah-once .ah-arrow { animation: ah-fly-once 0.55s cubic-bezier(0.2, 0.8, 0.3, 1) 0.25s both; }
-.ah-once .ah-apple { animation: ah-wobble 1.4s ease-in-out 0.25s both; }
-
 /* Microphone badge: the logo's sound wave, alive while listening */
 @keyframes wave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
 .wave-bar { transform-box: fill-box; transform-origin: center; }
 .wave-active .wave-bar { animation: wave 0.9s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ah-loop .ah-arrow, .ah-loop .ah-apple, .wave-active .wave-bar { animation: none !important; }
-  .ah-loop .ah-arrow { opacity: 1; }
+  .wave-active .wave-bar { animation: none !important; }
   * {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;

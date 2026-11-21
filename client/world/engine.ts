@@ -218,8 +218,6 @@ export class Engine {
   spot = { x: 0, y: 0, r: 0, a: 0, aTo: 0 };
   /** A ring travelling out through a cluster (focus "ripple"). */
   ripple = { on: false, x: 0, y: 0, R: 0, t0: 0, dur: 1300 };
-  /** The arrow that lands on a newly focused item (world point x, y; R = size of what it hits). */
-  private arrow = { on: false, x: 0, y: 0, R: 0, t0: 0 };
   private labelQueue: LabelItem[] = [];
   private labelWidths = new Map<string, number>();
   private breath = { t0: 0, dur: 0, amount: 0 };
@@ -429,20 +427,6 @@ export class Engine {
     r.y = y;
     r.R = Math.max(R, 12);
     r.t0 = performance.now() + delay;
-  }
-
-  /**
-   * An arrow flies in and sticks at a world point (the top of the focused item), quivers like William Tell's
-   * and leaves a target ring. Lasts about 2.6 s, then fades. Skipped for reduced motion.
-   */
-  shoot(x: number, y: number, R: number, delay = 380): void {
-    if (this.reduced) return;
-    const a = this.arrow;
-    a.on = true;
-    a.x = x;
-    a.y = y;
-    a.R = R;
-    a.t0 = performance.now() + delay;
   }
 
   /**
@@ -808,164 +792,6 @@ export class Engine {
     this.drawSparks(ctx, now);
     this.layer?.drawOver?.(ctx, now);
     this.flushLabels(ctx);
-    this.drawArrow(ctx, now);
-  }
-
-  /**
-   * William Tell: an apple pops up at the focused item, an arrow flies in (0.28 s) and pierces it, apple and arrow
-   * quiver, a few sparks burst out and two target rings spread; everything fades after about 2.6 s.
-   * Screen-space, so its size does not follow the zoom.
-   */
-  private drawArrow(ctx: CanvasRenderingContext2D, now: number): void {
-    const ar = this.arrow;
-    if (!ar.on) return;
-    const PRE = 260; // the apple appears this long before the arrow is loosed
-    const FLIGHT = 280;
-    const HOLD = 2300;
-    const FADE = 450;
-    const t = now - ar.t0;
-    if (t > HOLD + FADE) {
-      ar.on = false;
-      return;
-    }
-    if (t < -PRE) return;
-
-    const [cx, ty] = this.toScreen(ar.x, ar.y);
-    const L = 84;
-    const R = 14;
-    // Come in from the upper right; from the side when the target is near the top, mirrored near the right edge.
-    let heading = ty > L * 0.9 ? -Math.PI * 0.34 : -Math.PI * 0.1;
-    if (cx + L * Math.cos(heading) > this.width - 14) heading = Math.PI - heading;
-    // Hit a little off the centre, on the side the arrow comes from, so it never covers the label above the item.
-    const tx = cx + Math.sign(Math.cos(heading)) * 34;
-
-    const q = t - FLIGHT;
-    const flying = clamp(t / FLIGHT, 0, 1);
-    const approach = (1 - easeOutCubic(flying)) * 300;
-    // Damped quiver around the stuck pose, about the tip.
-    const quiver = q > 0 ? 0.13 * Math.exp(-q / 230) * Math.cos(q / 34) : 0;
-    const a = heading + quiver;
-    const dx = Math.cos(a);
-    const dy = Math.sin(a);
-    const px = -dy;
-    const py = dx;
-    const fadeOut = t > HOLD ? 1 - (t - HOLD) / FADE : 1;
-    const arrowAlpha = Math.min(1, flying * 4) * fadeOut;
-    const hx = tx + Math.cos(heading) * approach;
-    const hy = ty + Math.sin(heading) * approach;
-
-    // The apple sits on the arrow's line, behind the tip, so the head comes out on the far side.
-    const popIn = clamp((t + PRE) / PRE, 0, 1);
-    const pop = 1 + 2.7 * Math.pow(popIn - 1, 3) + 1.7 * Math.pow(popIn - 1, 2); // ease-out-back: a small overshoot
-    const squash = q > 0 ? 1 + 0.09 * Math.exp(-q / 190) * Math.cos(q / 40) : 1;
-    const ax = tx + Math.cos(heading) * R * 1.25;
-    const ay = ty + Math.sin(heading) * R * 1.25;
-
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.save();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    // Target rings at the point of impact.
-    if (q > 0) {
-      const ring = (delay: number, color: string, maxR: number) => {
-        const p = clamp((q - delay) / 560, 0, 1);
-        if (p <= 0 || p >= 1) return;
-        ctx.globalAlpha = arrowAlpha * 0.6 * (1 - p);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2.4 - p * 1.4;
-        ctx.beginPath();
-        ctx.arc(tx, ty, 4 + maxR * easeOutCubic(p), 0, TAU);
-        ctx.stroke();
-      };
-      ring(0, theme.paper, 34);
-      ring(110, theme.sun, 52);
-    }
-
-    // The apple.
-    if (popIn > 0) {
-      ctx.globalAlpha = Math.min(1, popIn * 2) * fadeOut;
-      ctx.translate(ax, ay);
-      ctx.rotate(quiver * 1.4);
-      ctx.scale(pop * squash, pop / squash);
-      this.apple(ctx, R);
-      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    }
-
-    // Sparks bursting out of the apple at the hit.
-    if (q > 0 && q < 520) {
-      const p = q / 520;
-      for (let i = 0; i < 7; i++) {
-        const ang = (i / 7) * TAU + 0.5;
-        const dist = 8 + 30 * easeOutCubic(p) * (0.7 + 0.3 * noise(i, 41));
-        ctx.globalAlpha = arrowAlpha * (1 - p);
-        ctx.fillStyle = i % 2 ? theme.sun : theme.paper;
-        ctx.beginPath();
-        ctx.arc(ax + Math.cos(ang) * dist, ay + Math.sin(ang) * dist, 2.6 * (1 - p) + 0.4, 0, TAU);
-        ctx.fill();
-      }
-    }
-
-    ctx.globalAlpha = arrowAlpha;
-    // Shaft, with a gap in the stage colour around it so it reads even where it crosses the apple (as in the logo).
-    const shaft = () => {
-      ctx.beginPath();
-      ctx.moveTo(hx, hy);
-      ctx.lineTo(hx + dx * L, hy + dy * L);
-    };
-    ctx.strokeStyle = theme.surface;
-    ctx.lineWidth = 6.5;
-    shaft();
-    ctx.stroke();
-    ctx.strokeStyle = theme.paper;
-    ctx.lineWidth = 3;
-    shaft();
-    ctx.stroke();
-
-    // Fletching: two sun-yellow feathers with an outline at the tail.
-    ctx.fillStyle = theme.sun;
-    ctx.lineWidth = 1.2;
-    for (const side of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(hx + dx * (L - 26), hy + dy * (L - 26));
-      ctx.lineTo(hx + dx * (L - 8) + px * side * 9, hy + dy * (L - 8) + py * side * 9);
-      ctx.lineTo(hx + dx * (L + 3) + px * side * 9, hy + dy * (L + 3) + py * side * 9);
-      ctx.lineTo(hx + dx * (L - 10), hy + dy * (L - 10));
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    // Head: a solid arrowhead pointing at the target, with the same gap around it.
-    ctx.beginPath();
-    ctx.moveTo(hx - dx * 3, hy - dy * 3);
-    ctx.lineTo(hx + dx * 15 + px * 6, hy + dy * 15 + py * 6);
-    ctx.lineTo(hx + dx * 15 - px * 6, hy + dy * 15 - py * 6);
-    ctx.closePath();
-    ctx.strokeStyle = theme.surface;
-    ctx.lineWidth = 2.6;
-    ctx.stroke();
-    ctx.fillStyle = theme.paper;
-    ctx.fill();
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  }
-
-  /** A small stylised apple (two lobes, a leaf) centred on the origin, radius r. */
-  private apple(ctx: CanvasRenderingContext2D, r: number): void {
-    ctx.fillStyle = theme.paper;
-    ctx.beginPath();
-    ctx.moveTo(0, -r * 0.5);
-    ctx.bezierCurveTo(r * 0.25, -r * 1.0, r * 1.3, -r * 0.65, r * 1.0, r * 0.25);
-    ctx.bezierCurveTo(r * 0.85, r * 0.95, r * 0.35, r * 1.15, 0, r * 0.92);
-    ctx.bezierCurveTo(-r * 0.35, r * 1.15, -r * 0.85, r * 0.95, -r * 1.0, r * 0.25);
-    ctx.bezierCurveTo(-r * 1.3, -r * 0.65, -r * 0.25, -r * 1.0, 0, -r * 0.5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = theme.saved;
-    ctx.beginPath();
-    ctx.ellipse(r * 0.38, -r * 0.98, r * 0.42, r * 0.2, -0.5, 0, TAU);
-    ctx.fill();
   }
 
   /** One radial gradient over the whole view, cached while the spot stays put. */

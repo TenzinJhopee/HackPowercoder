@@ -120,8 +120,6 @@ export abstract class Scene implements SceneLayer {
       e.spot.aTo = 1;
     }
     if (!this.focusFx) return;
-    // Every new focus is a hit: the arrow lands on the top of what is in focus.
-    e.shoot(x, fx.y + Math.min(8, fx.h * 0.06), R);
     if (style === "ripple") e.startRipple(x, y, R);
     if (carry) e.carry(x, y, R, color);
   }

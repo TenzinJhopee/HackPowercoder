@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from "react";
 import type { LineKind } from "@/client/events";
-import { AppleHit } from "./apple-hit";
 
 /** The line being spoken right now: how many of its words have been reached, and which are cue words. */
 export type CaptionLine = { words: string[]; cueIndices: number[]; spoken: number };
@@ -41,14 +40,14 @@ function AdvisorLine({ kind, words, cueIndices, spoken, live }: { kind: LineKind
  * The whole conversation, newest at the bottom, so anything said can be read again. The line being spoken fills in
  * word by word; the view follows it unless she has scrolled up to read earlier.
  */
-export function Transcript({ log, line, lineKind, thinking = false }: { log: LogEntry[]; line: CaptionLine | null; lineKind: LineKind | null; thinking?: boolean }) {
+export function Transcript({ log, line, lineKind }: { log: LogEntry[]; line: CaptionLine | null; lineKind: LineKind | null }) {
   const box = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
 
   useEffect(() => {
     const el = box.current;
     if (el && follow.current) el.scrollTo({ top: el.scrollHeight });
-  }, [log.length, line?.spoken, line?.words, thinking]);
+  }, [log.length, line?.spoken, line?.words]);
 
   return (
     <section aria-label="Conversation" className="rounded-2xl border border-line bg-surface shadow-card">
@@ -72,12 +71,6 @@ export function Transcript({ log, line, lineKind, thinking = false }: { log: Log
           )
         )}
         {line && lineKind && <AdvisorLine kind={lineKind} words={line.words} cueIndices={line.cueIndices} spoken={line.spoken} live />}
-        {thinking && (
-          <div className="flex items-center gap-2 pl-2 text-xs text-faint" aria-label="Putting the answer together">
-            <AppleHit size={42} loop />
-            <span>Aiming…</span>
-          </div>
-        )}
       </div>
     </section>
   );
