@@ -314,7 +314,7 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
             setVoiceBusy(false);
           };
           window.speechSynthesis.speak(utterance);
-          setError(`Gemini TTS unavailable: ${payloadMessage} Using your browser's voice instead.`);
+          setError(`ElevenLabs TTS unavailable: ${payloadMessage} Using your browser's voice instead.`);
           if (!autoPlay) setVoiceBusy(false);
           return;
         }
@@ -413,7 +413,7 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
             <div className="mt-3 grid gap-2 rounded-xl border border-white/10 bg-[#111018]/95 p-3 sm:grid-cols-2">
               <label className="flex items-start gap-2 leading-4">
                 <input checked={aiVoiceEnabled} className="mt-0.5 accent-violet-400" id="agent-ai-voice" onChange={(event) => {const enabled = event.target.checked;setAiVoiceEnabled(enabled);if (!enabled && "speechSynthesis" in window) window.speechSynthesis.cancel();}} type="checkbox" />
-                <span><span className="font-semibold text-white/75">AI voice</span> — uses Google Gemini TTS when available, with a browser voice fallback.</span>
+                <span><span className="font-semibold text-white/75">AI voice</span> — uses ElevenLabs TTS when available, with a browser voice fallback.</span>
               </label>
               <label className="flex items-start gap-2 leading-4">
                 <input checked={sharingConsent} className="mt-0.5 accent-violet-400" id="agent-sharing-consent" onChange={(event) => setSharingConsent(event.target.checked)} type="checkbox" />

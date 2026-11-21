@@ -74,12 +74,12 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$elevenlabs$2e$ts__$5b
 ;
 ;
 const runtime = "nodejs";
+const DEFAULT_ELEVENLABS_VOICE_ID = "nPczCjzI2devNBz1zQrb";
 const requestSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z__$2e$object$3e$__["z"].object({
     text: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z__$2e$string$3e$__["z"].string().trim().min(1).max(4000)
 }).strict();
 async function POST(request) {
     const apiKey = process.env.ELEVENLABS_API_KEY;
-    const voiceId = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
     if (!apiKey) return Response.json({
         error: "Speech generation is not configured. The text response is still available."
     }, {
@@ -102,6 +102,7 @@ async function POST(request) {
         status: 400
     });
     try {
+        const voiceId = process.env.ELEVENLABS_VOICE_ID?.trim() || DEFAULT_ELEVENLABS_VOICE_ID;
         const audio = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$elevenlabs$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["speakWithElevenLabs"])(parsed.data.text, voiceId, apiKey);
         return new Response(audio, {
             headers: {
@@ -111,7 +112,7 @@ async function POST(request) {
             }
         });
     } catch (reason) {
-        const message = reason instanceof Error ? reason.message : "Speech generation failed.";
+        const message = reason instanceof Error ? reason.message : "ElevenLabs speech generation failed.";
         return Response.json({
             error: `${message} The text response is still available.`
         }, {

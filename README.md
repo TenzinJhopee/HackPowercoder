@@ -33,7 +33,7 @@ The PostFinance Financial Intelligence Agent selects deterministic tools over th
 
 The assistant uses only local Ollama via its native `/api/chat` endpoint. Set `OLLAMA_BASE_URL=http://localhost:11434` and `OLLAMA_MODEL=MichelRosselli/apertus:latest` in `.env.local`; the matching values are provided in [.env.example](./.env.example). The assistant shows whether Ollama is reachable and whether the model is installed. There is no OpenAI-compatible or cloud LLM fallback. By default, the question and a minimized result from the deterministic financial engine are sent to local Ollama; transaction rows, CSV files, account identifiers, and chat history are not included. You can turn off Ollama in the assistant settings and use the exact local calculation alone.
 
-Voice is turn-based, not full-duplex. Enable **AI voice** to speak assistant responses automatically, or use **Play response** for individual replies. Set `GEMINI_API_KEY` server-side to generate spoken responses with Google Gemini TTS. Recorded audio transcription still uses ElevenLabs Scribe v3 and requires `ELEVENLABS_API_KEY`. Keep both credentials out of client code and source control. Microphone permission and both services are optional; text chat remains available if voice setup or a request fails. When Gemini TTS is unavailable, supported browsers use their built-in speech engine.
+Voice is turn-based, not full-duplex. Enable **AI voice** to speak assistant responses automatically, or use **Play response** for individual replies. Set `ELEVENLABS_API_KEY` server-side for ElevenLabs speech generation and Scribe v3 transcription; `ELEVENLABS_VOICE_ID` optionally selects the speech voice. Keep the credential out of client code and source control. Microphone permission and voice services are optional; text chat remains available if voice setup or a request fails. When ElevenLabs TTS is unavailable, supported browsers use their built-in speech engine.
 
 ## Demo
 
@@ -42,7 +42,7 @@ The onboarding screen offers an optional **Explore demo data** path. Every synth
 ## Prototype boundaries
 
 - Financial calculations and tool selection are deterministic; only the local Ollama model explains those results.
-- Voice transcription requires ElevenLabs credentials; speech generation requires a Gemini API key. Voice is not real-time or full-duplex.
+- Voice transcription and speech generation require ElevenLabs credentials. Voice is not real-time or full-duplex.
 - Portfolio holdings must be entered manually; valuations use manually supplied prices and are not live market data.
 - Forecasts are net cash-flow estimates and do not include a starting balance or guarantee future outcomes.
 - The assistant is informational and is not a licensed financial adviser.
