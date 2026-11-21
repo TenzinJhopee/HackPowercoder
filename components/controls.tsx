@@ -5,6 +5,7 @@ import type { BeatQuestion, ConversationMode } from "@/lib/contracts";
 import { AFFORD_EXAMPLE } from "@/content/scripts";
 import { STARTER_QUESTIONS } from "./welcome";
 import { Logo } from "./logo";
+import { ThemeToggle } from "./theme-toggle";
 
 const modeText: Record<ConversationMode, string> = {
   idle: "Ready",
@@ -18,8 +19,8 @@ const modeText: Record<ConversationMode, string> = {
 };
 
 const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
-const buttonBase = `rounded-lg border border-line bg-white px-3 py-2 text-xs font-semibold text-ink shadow-sm transition-colors hover:border-brand/40 aria-pressed:border-brand aria-pressed:bg-sun-soft ${focusRing}`;
-const primaryBase = `bg-brand text-sun shadow-sm shadow-brand/25 transition-colors hover:bg-brand-dark ${focusRing}`;
+const buttonBase = `rounded-lg border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink shadow-sm transition-colors hover:border-brand/40 aria-pressed:border-brand aria-pressed:bg-sun-soft ${focusRing}`;
+const primaryBase = `bg-brand text-on-brand shadow-sm shadow-brand/25 transition-colors hover:bg-brand-dark ${focusRing}`;
 
 /** Luma header: logo and wordmark on the left, sound and script toggles on the right. */
 export function StatusBar(props: { sound: boolean; scriptOpen: boolean; onSound: () => void; onScript: () => void }) {
@@ -28,6 +29,7 @@ export function StatusBar(props: { sound: boolean; scriptOpen: boolean; onSound:
       <div className="mx-auto flex h-[68px] w-full max-w-2xl items-center justify-between gap-2 px-4 md:max-w-3xl md:px-6 lg:max-w-6xl lg:px-8">
         <Logo />
         <div className="flex shrink-0 gap-2">
+          <ThemeToggle className={`${buttonBase} flex items-center justify-center px-2.5`} />
           <button type="button" className={buttonBase} aria-pressed={props.sound} onClick={props.onSound}>
             {props.sound ? "Sound on" : "Sound off"}
           </button>
@@ -62,13 +64,13 @@ export function StepBar({ main, side, mode }: { main: Step; side: Step; mode: Co
         {Array.from({ length: mainCount }, (_, i) => {
           const done = finished || (main !== null && i < main.index);
           const current = !finished && main !== null && i === main.index;
-          return <span key={i} className={`h-1 flex-1 rounded-full ${done ? "bg-brand/50" : current ? "bg-brand" : "bg-[#ebe5cf]"}`} />;
+          return <span key={i} className={`h-1 flex-1 rounded-full ${done ? "bg-brand/50" : current ? "bg-brand" : "bg-line"}`} />;
         })}
       </div>
       <div className="flex h-1 gap-1">
         {side &&
           Array.from({ length: side.count }, (_, i) => (
-            <span key={i} className={`h-1 flex-1 rounded-full ${i < side.index ? "bg-saved/60" : i === side.index ? "bg-saved" : "bg-[#ebe5cf]"}`} />
+            <span key={i} className={`h-1 flex-1 rounded-full ${i < side.index ? "bg-saved/60" : i === side.index ? "bg-saved" : "bg-line"}`} />
           ))}
       </div>
     </div>
@@ -103,7 +105,7 @@ export function Chips({ mode, canContinue, question, onStart, onSay, onResume, o
           className={
             chip.primary
               ? `rounded-full px-5 py-2.5 text-left text-sm font-semibold ${primaryBase}`
-              : `rounded-full border border-line bg-white px-4 py-2 text-left text-sm font-medium text-ink shadow-sm transition-colors hover:border-brand/40 hover:bg-sun-soft ${focusRing}`
+              : `rounded-full border border-line bg-surface px-4 py-2 text-left text-sm font-medium text-ink shadow-sm transition-colors hover:border-brand/40 hover:bg-sun-soft ${focusRing}`
           }
         >
           {chip.label}
@@ -149,7 +151,7 @@ export function InputRow(props: InputProps) {
   const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") submit();
   };
-  const small = `h-11 shrink-0 rounded-xl border border-line bg-white px-3 text-sm font-semibold text-ink shadow-sm transition-colors hover:border-brand/40 disabled:opacity-40 ${focusRing}`;
+  const small = `h-11 shrink-0 rounded-xl border border-line bg-surface px-3 text-sm font-semibold text-ink shadow-sm transition-colors hover:border-brand/40 disabled:opacity-40 ${focusRing}`;
   return (
     <div className="flex items-center gap-2">
       <input
@@ -159,7 +161,7 @@ export function InputRow(props: InputProps) {
         onKeyDown={onKey}
         placeholder="Ask about what is on screen"
         aria-label="Your question"
-        className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-white px-3 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none"
+        className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none"
       />
       <button
         type="button"
@@ -174,7 +176,7 @@ export function InputRow(props: InputProps) {
         onPointerLeave={props.onMicUp}
         onPointerCancel={props.onMicUp}
         onContextMenu={(event) => event.preventDefault()}
-        className={`flex h-11 w-12 shrink-0 select-none touch-none items-center justify-center rounded-xl shadow-sm transition-colors disabled:opacity-40 ${focusRing} ${props.micActive ? "wave-active bg-sun text-brand ring-2 ring-brand" : "bg-brand text-sun hover:bg-brand-dark"}`}
+        className={`flex h-11 w-12 shrink-0 select-none touch-none items-center justify-center rounded-xl shadow-sm transition-colors disabled:opacity-40 ${focusRing} ${props.micActive ? "wave-active bg-sun text-on-sun ring-2 ring-brand" : "bg-brand text-on-brand hover:bg-brand-dark"}`}
       >
         <Waveform />
       </button>

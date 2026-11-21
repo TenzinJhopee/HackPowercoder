@@ -72,9 +72,9 @@ export function Welcome({ onSay, onStart }: { onSay: (text: string) => void; onS
             <button
               type="button"
               onClick={() => onSay(question.text)}
-              className={`group flex h-full w-full items-start gap-3 rounded-2xl border border-line bg-white p-3.5 text-left shadow-card transition-colors hover:border-brand/40 hover:bg-sun-soft ${focusRing}`}
+              className={`group flex h-full w-full items-start gap-3 rounded-2xl border border-line bg-surface p-3.5 text-left shadow-card transition-colors hover:border-brand/40 hover:bg-sun-soft ${focusRing}`}
             >
-              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sun text-brand transition-transform group-hover:scale-105">
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sun text-on-sun transition-transform group-hover:scale-105">
                 <Icon name={question.icon} />
               </span>
               <span className="min-w-0">
@@ -90,7 +90,7 @@ export function Welcome({ onSay, onStart }: { onSay: (text: string) => void; onS
         <button
           type="button"
           onClick={onStart}
-          className={`rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-sun shadow-sm shadow-brand/25 transition-colors hover:bg-brand-dark ${focusRing}`}
+          className={`rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-on-brand shadow-sm shadow-brand/25 transition-colors hover:bg-brand-dark ${focusRing}`}
         >
           Walk me through my year
         </button>

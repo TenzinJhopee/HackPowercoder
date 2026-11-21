@@ -29,11 +29,11 @@ export function Takeaway({ line, kind, mode }: { line: CaptionLine | null; kind:
       {phrase && (
         // Re-keyed on the sentence so the plaque slides in again for every step.
         <p key={phrase} className="takeaway-in inline-flex max-w-full items-center gap-2.5 rounded-full border border-sun-deep/50 bg-sun-soft py-1.5 pl-1.5 pr-4">
-          <span className="shrink-0 rounded-full bg-sun px-2.5 py-1 text-[10px] font-bold uppercase leading-none tracking-[0.14em] text-brand">{kicker[mode] ?? "Now"}</span>
+          <span className="shrink-0 rounded-full bg-sun px-2.5 py-1 text-[10px] font-bold uppercase leading-none tracking-[0.14em] text-on-sun">{kicker[mode] ?? "Now"}</span>
           <span className="min-w-0 truncate text-sm font-semibold text-ink">
             {splitFigures(phrase).map((part, index) =>
               part.figure ? (
-                <span key={index} className="rounded bg-sun/60 px-1 tabular-nums text-brand">
+                <span key={index} className="rounded bg-sun px-1 tabular-nums text-on-sun">
                   {part.text}
                 </span>
               ) : (

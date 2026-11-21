@@ -27,6 +27,15 @@ export const palette = {
   faint: rgb(theme.faint)
 } as const;
 
+/** Overwrites an RGB triplet in place. Palette entries are shared by reference, so everything holding one follows. */
+export function setRgb(target: RGB, hex: string): void {
+  const c = rgb(hex);
+  const t = target as unknown as number[];
+  t[0] = c[0];
+  t[1] = c[1];
+  t[2] = c[2];
+}
+
 /** Deterministic noise in [0, 1) per grain and salt: everything visible is seeded (backup video must replay). */
 export function noise(id: number, salt = 0): number {
   let h = Math.imul(id ^ 0x5bd1e995, 0x85ebca6b) ^ Math.imul(salt + 0x27d4eb2f, 0xc2b2ae35);
@@ -417,6 +426,30 @@ export class Engine {
     a.t0 = performance.now() + delay;
   }
 
+  /**
+   * The look changed (light/dark): every grain colour that equals a `from` colour becomes its `to` colour, so the
+   * grains change at once without flying anywhere. Colours a scene sets later come from the (already updated) palette.
+   */
+  recolor(pairs: readonly (readonly [RGB, RGB])[]): void {
+    this.spotGradient = null;
+    const swap = (c: RGB): boolean => {
+      for (const [from, to] of pairs) {
+        if (c[0] === from[0] && c[1] === from[1] && c[2] === from[2]) {
+          const t = c as unknown as number[];
+          t[0] = to[0];
+          t[1] = to[1];
+          t[2] = to[2];
+          return true;
+        }
+      }
+      return false;
+    };
+    for (const g of this.grains) {
+      if (swap(g.color)) g.fill = fillOf(g.color);
+      swap(g.c0);
+    }
+  }
+
   /** Taşıma: a few sparks leave a world cluster and travel to the top centre of the stage (where the big figure sits). */
   carry(x: number, y: number, R: number, color: RGB, count = 7): void {
     if (this.reduced || !this.width) return;
@@ -759,8 +792,10 @@ export class Engine {
     let cache = this.spotGradient;
     if (!cache || cache.x !== sp.x || cache.y !== sp.y || cache.r !== sp.r) {
       const g = ctx.createRadialGradient(sp.x, sp.y, sp.r * 0.8, sp.x, sp.y, sp.r * 2.6);
-      g.addColorStop(0, "rgba(255,255,255,0)");
-      g.addColorStop(1, "rgba(255,255,255,0.8)");
+      // The vignette fades towards the stage colour, whichever look is active.
+      const [sr, sg, sb] = rgb(theme.surface);
+      g.addColorStop(0, `rgba(${sr},${sg},${sb},0)`);
+      g.addColorStop(1, `rgba(${sr},${sg},${sb},0.8)`);
       cache = this.spotGradient = { g, x: sp.x, y: sp.y, r: sp.r };
     }
     const grad = cache.g;

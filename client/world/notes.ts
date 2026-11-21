@@ -24,7 +24,8 @@ export const MIN_HALF_WIDTH = 2.5;
 const RAISE_FROM = 1.5;
 /** Stream notes (jars) are tiny dots in the dot look; as notes they get this minimum half-width. */
 const STREAM_HALF_WIDTH = 2.6;
-const FRAME_STYLE = "rgba(11,13,18,0.42)";
+/** The thin printed frame of a note; darker than the note on both looks. Set by skin.ts. */
+export const noteSkin = { frame: "rgba(11,13,18,0.42)" };
 
 /** Rectangles are symmetric under a half turn: shortest angle difference modulo pi. */
 const wrapHalf = (d: number) => ((((d + HALF_PI) % Math.PI) + Math.PI) % Math.PI) - HALF_PI;
@@ -85,7 +86,7 @@ export class NoteRenderer {
     this.dpr = dpr;
     this.reduced = reduced;
     this.scatter += (this.scatterTo - this.scatter) * (1 - Math.exp(-this.dt / 600));
-    ctx.strokeStyle = FRAME_STYLE;
+    ctx.strokeStyle = noteSkin.frame;
     ctx.lineWidth = 0.75;
   }
 

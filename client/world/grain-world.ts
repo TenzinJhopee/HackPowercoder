@@ -1,6 +1,6 @@
 import type { Breakdown, SceneType, World } from "@/lib/contracts";
 import { pickChoreo, pickFocusStyle, type ChoreoName, type FocusStyle } from "./choreo";
-import { Engine } from "./engine";
+import { Engine, type RGB } from "./engine";
 import type { ApplyKind, Category, Scene, SceneEnv, WorldFacts } from "./scenes/base";
 import { GalaxyScene } from "./scenes/galaxy";
 import { JarsScene, jarName } from "./scenes/jars";
@@ -125,6 +125,11 @@ export class GrainWorld implements World {
       this.note(`transform:${name}`);
       this.run("update");
     }
+  }
+
+  /** Not part of World: the look changed; recolour the grains already on screen (see skin.ts). */
+  recolor(pairs: readonly (readonly [RGB, RGB])[]): void {
+    this.engine.recolor(pairs);
   }
 
   /** Not part of World: clear demo state (filled jars, focus, breakdown) when the presentation starts over. No cut. */

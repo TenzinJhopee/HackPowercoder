@@ -11,6 +11,8 @@ import type { Beat, BeatQuestion, ConversationMode, Figure, Snapshot } from "@/l
 import type { LineKind } from "@/client/events";
 import { MAIN, SIDE_ANSWERS } from "@/content/scripts";
 import { GrainWorld } from "@/client/world/grain-world";
+import { applySkin } from "@/client/world/skin";
+import { THEME_EVENT, currentTheme, type ThemeName } from "./theme";
 import type { CaptionLine } from "./caption";
 import type { PlayingScript } from "./script-panel";
 import type { FigureChange } from "./stage";
@@ -112,6 +114,14 @@ export function useAdvisor() {
       window.removeEventListener("offline", update);
     };
   }, []);
+
+  // The canvas keeps its own colours: apply the saved look once, then follow the toggle (no reload, grains recolour in place).
+  useEffect(() => {
+    world.recolor(applySkin(currentTheme()));
+    const onTheme = (event: Event) => world.recolor(applySkin((event as CustomEvent<ThemeName>).detail));
+    window.addEventListener(THEME_EVENT, onTheme);
+    return () => window.removeEventListener(THEME_EVENT, onTheme);
+  }, [world]);
 
   useEffect(() => {
     if (backup === null) return;

@@ -10,7 +10,7 @@ export function Logo() {
       <img src="/brand/tellhorn-mark.png" alt="" width={245} height={240} className="h-9 w-auto shrink-0 sm:h-10" />
       <div className="min-w-0">
         <img src="/brand/tellhorn-wordmark.png" alt="TellHorn" width={720} height={105} className="h-5 w-auto sm:h-6" />
-        <p className="mt-1 hidden text-[11px] font-medium leading-none tracking-wide text-brand/80 md:block">The William Tell of your finances</p>
+        <p className="mt-1 hidden text-[11px] font-medium leading-none tracking-wide text-on-sun/80 md:block">The William Tell of your finances</p>
       </div>
     </div>
   );

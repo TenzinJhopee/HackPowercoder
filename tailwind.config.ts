@@ -1,30 +1,36 @@
 import type { Config } from "tailwindcss";
 
+/** A colour that follows the active look (light or dark) and still accepts opacity, e.g. bg-brand/50. */
+const themed = (name: string) => `rgb(var(--c-${name}) / <alpha-value>)`;
+
 const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        // TellHorn brand (from the logo): deep teal and sun yellow
-        ink: "#00323d",
-        muted: "#6f8c92",
-        brand: "#004b5a",
-        "brand-dark": "#003642",
-        sun: "#ffcc00",
-        "sun-deep": "#e6b800",
-        "sun-soft": "#fff3bf",
-        canvas: "#fbf8ec",
-        line: "#e9e3cc",
+        // TellHorn brand (from the logo): deep teal and sun yellow. Values live in app/globals.css.
+        ink: themed("ink"),
+        muted: themed("muted"),
+        brand: themed("brand"),
+        "brand-dark": themed("brand-dark"),
+        "on-brand": themed("on-brand"),
+        sun: themed("sun"),
+        "sun-deep": themed("sun-deep"),
+        "sun-soft": themed("sun-soft"),
+        "on-sun": themed("on-sun"),
+        canvas: themed("canvas"),
+        surface: themed("surface"),
+        line: themed("line"),
         // Data colours: same values as components/theme.ts (canvas drawing)
-        soft: "#3f6670",
-        faint: "#5c7c84",
-        spend: "#e08d12",
-        coral: "#ec615c",
-        saved: "#2fa36b",
-        // Darker variants for small text on white (contrast)
-        "spend-ink": "#a35d00",
-        "coral-ink": "#c9433d",
-        "saved-ink": "#1b7a4c"
+        soft: themed("soft"),
+        faint: themed("faint"),
+        spend: themed("spend"),
+        coral: themed("coral"),
+        saved: themed("saved"),
+        // Brighter or darker variants for small text (contrast on the current surface)
+        "spend-ink": themed("spend-ink"),
+        "coral-ink": themed("coral-ink"),
+        "saved-ink": themed("saved-ink")
       },
       boxShadow: {
         card: "0 8px 26px rgba(20, 34, 56, 0.045)"

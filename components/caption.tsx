@@ -8,7 +8,7 @@ export type CaptionLine = { words: string[]; cueIndices: number[]; spoken: numbe
  */
 export function Caption({ line }: { line: CaptionLine | null }) {
   const cues = new Set(line?.cueIndices ?? []);
-  const chrome = line ? "border-line bg-white shadow-card" : "border-transparent bg-transparent";
+  const chrome = line ? "border-line bg-surface shadow-card" : "border-transparent bg-transparent";
   return (
     <section aria-label="Caption" className={`rounded-2xl border px-5 py-4 transition-colors duration-200 ${chrome}`}>
       <p
@@ -17,7 +17,7 @@ export function Caption({ line }: { line: CaptionLine | null }) {
       >
         {line?.words.map((word, index) => {
           const spoken = index < line.spoken;
-          const color = !spoken ? "text-[#a9bcc0]" : cues.has(index) ? "text-spend-ink" : "text-ink";
+          const color = !spoken ? "text-faint/55" : cues.has(index) ? "text-spend-ink" : "text-ink";
           return (
             <span key={index} className={`transition-colors duration-150 ${color}`}>
               {word}
