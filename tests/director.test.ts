@@ -124,6 +124,35 @@ test("runDirectorTool: find_transactions nets refunds, rejects bad input, collec
   assert.deepEqual(runDirectorTool("total", { series: "monthly_spending", months: [5, 6] }, tc).numbers, [350]);
 });
 
+test("runDirectorTool: recurring_payments and forecast use the data's date, not today", () => {
+  const transactions: Transaction[] = [];
+  // Store has monthly dates but unstable amounts, so it is variable spending, not a regular payment.
+  const store = [300, 900, 450, 800, 200, 500];
+  ["07", "08", "09", "10", "11", "12"].forEach((m, i) => {
+    transactions.push({ ...booking(`rent-${m}`, `2025-${m}-01`, "Rent", -1820), category: "Housing" });
+    transactions.push({ ...booking(`pay-${m}`, `2025-${m}-25`, "Employer", 7000, "income"), category: "Income" });
+    transactions.push(booking(`shop-${m}`, `2025-${m}-12`, "Store", -store[i]));
+  });
+  transactions.push(booking("refund", "2025-12-14", "Store", 200, "refund"));
+  const tc: DirectorToolContext = { series: buildSeries(transactions, "CHF", 2025), transactions, currency: "CHF", asOf: "2025-12-25" };
+
+  const recurring = runDirectorTool("recurring_payments", {}, tc);
+  assert.deepEqual(JSON.parse(recurring.text), [
+    { name: "Rent", cadence: "monthly", typical_amount: 1820, count: 6, total_paid: 10920, last_date: "2025-12-01", active: true }
+  ]);
+  assert.ok(recurring.numbers.includes(10920));
+
+  const forecast = runDirectorTool("forecast", "{}", tc);
+  const result = JSON.parse(forecast.text);
+  assert.equal(result.as_of, "2025-12-25");
+  assert.equal(result.regular_expenses_monthly, 1820);
+  // Store spending of the last three months, net of the December refund: (800 + 200 + 300) / 3.
+  assert.equal(result.variable_expenses_monthly, 433);
+  assert.ok(Math.abs(result.days_30.net - (result.days_30.income - result.days_30.expenses)) <= 1);
+  assert.ok(result.days_30.income > 6800 && result.days_30.income < 7000);
+  assert.ok(forecast.numbers.includes(result.days_90.expenses));
+});
+
 test("no beat left means failure", () => {
   assert.equal(validateScript({ script: [{ scene: { type: "monthly" } }] }, ctx()).ok, false);
   assert.equal(validateScript("nope", ctx()).ok, false);
