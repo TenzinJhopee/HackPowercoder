@@ -14,6 +14,10 @@ export type WorldFacts = {
   monthly_spending_jan_dec: number[];
   month_end_balance_vs_start_jan_dec: number[];
   gaps?: { id: string; month?: number; usual_amount?: number }[];
+  /** Month "1"-"12" → named parts summing to that month's spending ("Other" last). */
+  monthly_breakdown_parts?: Record<string, { name: string; value: number; aliases?: string[] }[]>;
+  /** Month "1"-"12" → category → net value (fallback when a month has no parts). */
+  monthly_breakdown_by_category?: Record<string, Record<string, number>>;
 };
 
 export type Category = { name: string; value: number; count: number; saved: boolean; aliases: string[] };
@@ -98,14 +102,17 @@ export abstract class Scene implements SceneLayer {
     return focal(this.focusStyle, hit);
   }
 
-  /** Frame the focused item in the current look; on a new focus also play its one-shot effect and carry sparks. */
-  protected focusCamera(box: Box, opts: { min?: number; max?: number; pad?: number } = {}, color: RGB = palette.paper, carry = true): void {
+  /**
+   * Frame the focused item in the current look; on a new focus also play its one-shot effect and carry sparks.
+   * `fx` = where the effect sits when it differs from the framed box (a segment inside a framed column).
+   */
+  protected focusCamera(box: Box, opts: { min?: number; max?: number; pad?: number } = {}, color: RGB = palette.paper, carry = true, fx: Box = box): void {
     const e = this.engine;
     const style = this.focusStyle;
     e.frame(box, { ...opts, soften: FOCUS_SOFTEN[style] });
-    const x = box.x + box.w / 2;
-    const y = box.y + box.h / 2;
-    const R = Math.max(box.w, box.h) / 2;
+    const x = fx.x + fx.w / 2;
+    const y = fx.y + fx.h / 2;
+    const R = Math.max(fx.w, fx.h) / 2;
     if (style === "spotlight") {
       e.spot.x = x;
       e.spot.y = y;
