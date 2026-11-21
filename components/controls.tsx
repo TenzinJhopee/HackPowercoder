@@ -22,20 +22,14 @@ const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:o
 const buttonBase = `rounded-lg border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink shadow-sm transition-colors hover:border-brand/40 aria-pressed:border-brand aria-pressed:bg-sun-soft ${focusRing}`;
 const primaryBase = `bg-brand text-on-brand shadow-sm shadow-brand/25 transition-colors hover:bg-brand-dark ${focusRing}`;
 
-/** Luma header: logo and wordmark on the left, sound and script toggles on the right. */
-export function StatusBar(props: { sound: boolean; scriptOpen: boolean; onSound: () => void; onScript: () => void }) {
+/** Header: logo and wordmark on the left, the light/dark switch on the right. */
+export function StatusBar() {
   return (
     <header className="sticky top-0 z-20 border-b border-sun-deep bg-sun">
       <div className="mx-auto flex h-[68px] w-full max-w-2xl items-center justify-between gap-2 px-4 md:max-w-3xl md:px-6 lg:max-w-6xl lg:px-8">
         <Logo />
         <div className="flex shrink-0 gap-2">
           <ThemeToggle className={`${buttonBase} flex items-center justify-center px-2.5`} />
-          <button type="button" className={buttonBase} aria-pressed={props.sound} onClick={props.onSound}>
-            {props.sound ? "Sound on" : "Sound off"}
-          </button>
-          <button type="button" className={buttonBase} aria-pressed={props.scriptOpen} onClick={props.onScript}>
-            Script
-          </button>
         </div>
       </div>
     </header>

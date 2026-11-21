@@ -1,11 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { Chips, InputRow, ProgressPill, StatusBar, useInputFocus } from "./controls";
 import { OfferCard } from "./offer-card";
 import { OpenPoints } from "./open-points";
 import { SavingsSlip } from "./savings-slip";
-import { ScriptPanel } from "./script-panel";
 import { Stage } from "./stage";
 import { Transcript } from "./transcript";
 import { useAdvisor } from "./use-advisor";
@@ -22,7 +20,6 @@ import { useSpeechInput } from "./use-speech-input";
 export function AdvisorShell() {
   const advisor = useAdvisor();
   const input = useInputFocus();
-  const [scriptOpen, setScriptOpen] = useState(false);
 
   const mic = useSpeechInput((text, final) => {
     if (final) {
@@ -40,12 +37,7 @@ export function AdvisorShell() {
 
   return (
     <div className="min-h-screen bg-canvas md:flex md:h-dvh md:min-h-[35rem] md:flex-col">
-      <StatusBar
-        sound={advisor.sound}
-        scriptOpen={scriptOpen}
-        onSound={() => advisor.setSound(!advisor.sound)}
-        onScript={() => setScriptOpen((open) => !open)}
-      />
+      <StatusBar />
       <main className="mx-auto w-full max-w-2xl px-4 pb-8 pt-5 md:flex md:min-h-0 md:max-w-3xl md:flex-1 md:flex-col md:px-6 md:pb-5 md:pt-4 lg:max-w-6xl lg:px-8 lg:pb-6 lg:pt-5">
         <div className="flex flex-col gap-4 md:grid md:min-h-0 md:flex-1 md:grid-rows-[minmax(0,3fr)_minmax(0,2fr)] md:gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:grid-rows-1 lg:gap-6">
           <Stage world={advisor.world} figure={advisor.figure} pausedAt={pausedAt} status={<ProgressPill mode={advisor.mode} backup={availability.backup} main={advisor.mainStep} side={advisor.sideStep} />} />
@@ -100,11 +92,6 @@ export function AdvisorShell() {
               {liveText} · {advisor.availability.voiceLine} · {micText}
             </p>
             {advisor.error && <p className="text-xs text-coral-ink">{advisor.error}</p>}
-            {scriptOpen && (
-              <div className="md:max-h-44 md:shrink-0 md:overflow-y-auto">
-                <ScriptPanel snapshot={advisor.snapshot} playing={advisor.playing} />
-              </div>
-            )}
           </div>
         </div>
       </main>
