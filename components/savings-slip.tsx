@@ -49,19 +49,27 @@ function Tally({ cut }: { cut: Cut }) {
 }
 
 function CutLine({ cut, name }: { cut: Cut; name: string }) {
+  const cancel = cut.kind === "cancel";
   return (
-    <li className="slip-line py-2.5" aria-label={`${cut.fewer} fewer ${name} a month, of ${cut.usualPerMonth}: saves ${cut.saves} francs`}>
+    <li
+      className="slip-line py-2.5"
+      aria-label={cancel ? `${name}: saves ${cut.saves} francs a month` : `${cut.fewer} fewer ${name} a month, of ${cut.usualPerMonth}: saves ${cut.saves} francs`}
+    >
       <div className="flex items-baseline gap-2">
         <span className="inline-block text-sm font-medium text-ink first-letter:uppercase">{name}</span>
         <span aria-hidden className="mb-1 flex-1 border-b border-dotted border-faint/40" />
         <span className="text-base font-semibold tabular-nums text-saved-ink">+{swiss(cut.saves)}</span>
       </div>
-      <div className="mt-1.5 flex items-center gap-3">
-        <Tally cut={cut} />
-        <span className="text-[11px] tabular-nums text-faint">
-          −{cut.fewer} of {cut.usualPerMonth}
-        </span>
-      </div>
+      {cancel ? (
+        <p className="mt-1.5 text-[11px] text-faint">Subscription, the full amount</p>
+      ) : (
+        <div className="mt-1.5 flex items-center gap-3">
+          <Tally cut={cut} />
+          <span className="text-[11px] tabular-nums text-faint">
+            −{cut.fewer} of {cut.usualPerMonth}
+          </span>
+        </div>
+      )}
     </li>
   );
 }
@@ -112,7 +120,7 @@ export function SavingsSlip({ slip, onClose }: { slip: KeptSlip; onClose: () => 
 
         {totalShown && (
           <div className="slip-line mt-2 border-t-2 border-double border-line pt-4 text-center">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-faint">{short ? "Your habits give" : "Saved a month"}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-faint">{short ? "These changes give" : "Saved a month"}</p>
             <p className="mt-1 text-5xl font-semibold tabular-nums leading-none text-saved-ink">
               <span className="mr-1.5 align-top text-base font-medium text-saved-ink/80">CHF</span>
               {swiss(short ? plan.reachable : plan.monthly)}

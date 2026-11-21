@@ -32,7 +32,7 @@ type State = {
   offer: Beat | null;
   offerConfirmed: boolean;
   question: BeatQuestion | null;
-  /** Questions asked so far, with their assumptions; stay to the end, cleared on start over. */
+  /** Questions asked so far, with their assumptions, plus remembered answers; a start over keeps only the answered ones. */
   points: OpenPoint[];
   /** The savings slip: stays until the user closes it or starts over. */
   slip: KeptSlip | null;
@@ -133,7 +133,8 @@ export function useAdvisor() {
     world.enter("galaxy");
     setVoiceLine(speaker.statusLine());
     const off = conversation.on((event) => dispatch({ type: "engine", event }));
-    void speaker.preload(MAIN.map((beat) => beat.say)).then(() => setVoiceLine(speaker.statusLine()), () => undefined);
+    const recalls = MAIN.flatMap((beat) => beat.question?.answers.flatMap((a) => (a.recall ? [a.recall] : [])) ?? []);
+    void speaker.preload([...MAIN.map((beat) => beat.say), ...recalls]).then(() => setVoiceLine(speaker.statusLine()), () => undefined);
     return () => {
       off();
       conversation.end();
@@ -156,6 +157,8 @@ export function useAdvisor() {
   const resume = useCallback(() => void engine.current?.resume(), []);
   /** Without `subject`: the question being asked now. With it: any open point, recorded without touching playback. */
   const answer = useCallback((id: string, subject?: string) => void engine.current?.answer(id, subject), []);
+  /** "Forget my answers": deletes the saved answers; the points turn unanswered. Playback goes on. */
+  const forget = useCallback(() => void engine.current?.forget(), []);
   const confirmOffer = useCallback(() => {
     engine.current?.confirmOffer(OFFER_JAR, OFFER_FIGURE);
     dispatch({ type: "confirmed" });
@@ -188,6 +191,7 @@ export function useAdvisor() {
     say,
     resume,
     answer,
+    forget,
     confirmOffer,
     closeSlip,
     setSound

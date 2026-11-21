@@ -29,6 +29,9 @@ test("plan section 5 acceptance numbers", () => {
   assert.ok(facts.gaps.some((g) => g.id === "missing_payment:Krankenkasse:2025-02" && g.month === 2 && g.usual_amount === 982));
   assert.ok(facts.gaps.some((g) => g.id === "no_pillar_3a") && facts.gaps.some((g) => g.id === "no_savings"));
   assert.deepEqual(facts.offer, { product: "pillar 3a", monthly: 200, after_one_year: 2400 });
+  // The 100 franc example cancels Netflix first, then cuts two habits.
+  assert.deepEqual(facts.savings.example.cuts.map((c) => [c.kind, c.merchant, c.saves]), [["cancel", "Netflix", 21], ["habit", "Orell Fuessli", 73], ["habit", "Kantine AG", 13]]);
+  assert.deepEqual([facts.savings.example.monthly, facts.savings.example.yearly, facts.savings.example.reachable], [107, 1284, 161]);
 });
 
 test("every month's parts add up to the month's spending", () => {

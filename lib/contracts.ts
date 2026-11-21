@@ -47,8 +47,13 @@ export type Beat = {
  * `label`: the open point's 2-4 word name. `assume`: one short sentence, how the advisor works while it is unanswered.
  */
 export type BeatQuestion = { subject: string; label: string; assume: string; answers: BeatAnswer[] };
-/** `id` is the machine answer saved in notes; `kind` matches spoken "yes"/"no" replies; `skipOffer` skips the offer beat. */
-export type BeatAnswer = { id: string; label: string; kind: "yes" | "no"; skipOffer?: boolean };
+/**
+ * `id` is the machine answer saved in notes; `kind` matches spoken "yes"/"no" replies; `skipOffer` skips the offer beat.
+ * `recall`: said instead of the beat's `say` once this answer is known (saved earlier or given this run), so the question
+ * is never asked twice. Same rules as `say` (one sentence, max 18 words, only that beat's numbers, "you told me"); it
+ * must contain the beat's cue words, never first.
+ */
+export type BeatAnswer = { id: string; label: string; kind: "yes" | "no"; skipOffer?: boolean; recall?: string };
 
 export type Script = Beat[];
 

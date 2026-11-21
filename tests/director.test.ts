@@ -164,7 +164,7 @@ test("savings and habit questions: prompt carries the levers and the one option"
   const transactions = [...load("Account1.csv"), ...load("Account3.csv")];
   const facts = buildFacts(transactions, "CHF");
   const block = buildDataBlock(facts, buildSeries(transactions, "CHF", 2025));
-  for (const needle of ["byNecessity", "monthlyRoomAfterCompulsory", "flexibleHabits", "Kantine AG", "refund_heavy:Abercrombie & Fitch", "habit_stopped:Digitec Galaxus", "one_off_pot"]) {
+  for (const needle of ["byNecessity", "monthlyRoomAfterCompulsory", "flexibleHabits", "Kantine AG", "refund_heavy:Abercrombie & Fitch", "habit_stopped:Digitec Galaxus", "one_off_pot", "savesYearly", "costsMonthly"]) {
     assert.ok(block.includes(needle), needle);
   }
   for (const needle of ["levers.adjustable", "levers.flexibleHabits", "pillar 3a", "\"offer\": true", "never \"unnecessary\""]) {
@@ -206,5 +206,10 @@ test("prepared answers cover saving and habit questions without stealing month o
   const save = SIDE_ANSWERS.find((a) => a.id === "save")!.script as Script;
   assert.equal(save.filter((b) => b.offer).length, 1);
   assert.ok(save.at(-1)?.offer);
+  // Something she can do first (cancel, then switch), never the fixed / flexible statistics.
+  assert.match(save[0].say, /Netflix.*21 francs a month, 251 a year: small/);
+  assert.match(save[1].say, /health insurance costs 982 francs/);
+  assert.ok(!/sav/.test(save[1].say), "no saving figure for a switch");
+  assert.ok(!save.some((b) => /\b(fixed|flexible|adjustable)\b/.test(b.say)));
   assert.ok(!(SIDE_ANSWERS.find((a) => a.id === "habits")!.script as Script).some((b) => b.offer));
 });

@@ -82,7 +82,7 @@ export function AdvisorShell() {
               inputRef={input.ref}
             />
             {/* In the side column (below the stage on phones): it grows the column, never the stage's fixed-height canvas. */}
-            {advisor.points.length > 0 && <OpenPoints points={advisor.points} onAnswer={advisor.answer} />}
+            {advisor.points.length > 0 && <OpenPoints points={advisor.points} onAnswer={advisor.answer} onForget={advisor.forget} />}
             {advisor.slip && <SavingsSlip slip={advisor.slip} onClose={advisor.closeSlip} />}
             <p className="text-xs leading-5 text-faint">
               {liveText} · {advisor.availability.voiceLine} · {micText}

@@ -3,6 +3,7 @@ import {
   DEFAULT_BRIDGE,
   DIRECTOR_FAILURE_LINE,
   FILLER_LINES,
+  type Beat,
   type BeatQuestion,
   type ConversationMode,
   type DirectorRequest,
@@ -18,7 +19,10 @@ import type { Keepsake } from "@/lib/savings-plan";
 import { Emitter, type EngineListener, type OpenPoint } from "../events";
 import { Player } from "../player/player";
 import { isBackupMode, type Speaker } from "../player/voice";
-import { classify, matchAnswer, targetIn } from "./intent";
+import { classify, isRepeatRequest, matchAnswer, targetIn } from "./intent";
+
+/** Lead-ins before an answer is replayed on "can you repeat that?". */
+const REPEAT_LEADS = ["Of course, once more.", "Sure, here it is again."] as const;
 
 /** `script` may be built from the question (e.g. the amount in "Can I afford ...?"); no network either way. */
 export type PreparedAnswer = {
@@ -53,7 +57,11 @@ export type ConversationOptions = {
   visible?: () => unknown;
   /** How long a question beat waits for an answer before the presentation goes on by itself. Default 3500. */
   questionPauseMs?: number;
+  /** How long start() waits at most for the saved answers (GET notesUrl) before the first beat. Default 300. */
+  notesWaitMs?: number;
 };
+
+type SavedNote = { subject?: unknown; answer?: unknown };
 
 const isScript = (value: unknown): value is Script =>
   Array.isArray(value) && value.length > 0 && value.every((b) => b && typeof b === "object" && typeof (b as { say?: unknown }).say === "string" && (b as { say: string }).say.trim() !== "");
@@ -75,8 +83,16 @@ export class Conversation {
   private directorAbort: AbortController | null = null;
   /** The running pause after a question beat; ended early whenever another flow starts. */
   private pause: { timer: ReturnType<typeof setTimeout>; done: () => void } | null = null;
-  /** Every question asked since the start, answered or not (shown as open points). */
+  /** Every question asked since the start, answered or not, plus the remembered ones (shown as open points). */
   private points: OpenPoint[] = [];
+  /** Known answers by subject: loaded from the notes endpoint or given in this session. Survives start over. */
+  private readonly remembered = new Map<string, string>();
+  private readonly notesWaitMs: number;
+  /** The saved answers' load (never rejects); `notesSettled` once it is done either way. */
+  private readonly notesLoad: Promise<void>;
+  private notesSettled = false;
+  /** Bumped by forget(): a load still on its way is then ignored. */
+  private forgets = 0;
 
   mode: ConversationMode = "idle";
   /** Saved at interruption; one level deep. */
@@ -93,6 +109,8 @@ export class Conversation {
   private confirmPending = false;
   /** Next filler line; rotates so consecutive questions sound different. */
   private fillerIndex = 0;
+  /** The last side answer played, so "can you repeat that?" replays it instead of asking the director again. */
+  private lastSide: Script | null = null;
   /** Rotation position per fixed line list (lead-ins, closings, re-entries, invitations). */
   private readonly turns = new Map<readonly string[], number>();
 
@@ -107,7 +125,11 @@ export class Conversation {
     this.directorTimeoutMs = options.directorTimeoutMs ?? 12000;
     this.visible = options.visible;
     this.questionPauseMs = options.questionPauseMs ?? 3500;
+    this.notesWaitMs = options.notesWaitMs ?? 300;
     this.player = new Player({ world: options.world, voice: options.voice, emit: this.events.emit });
+    this.notesLoad = this.loadNotes().finally(() => {
+      this.notesSettled = true;
+    });
   }
 
   /** Subscribe to engine events (captions, figure, offer, mode, snapshot). Returns unsubscribe. */
@@ -115,14 +137,43 @@ export class Conversation {
     return this.events.on(listener);
   }
 
-  /** Start (or start over) the main script from beat 1. */
-  start(): Promise<void> {
+  /**
+   * Start (or start over) the main script from beat 1. Remembered answers stay as answered open points; a load of the
+   * saved answers still on its way is waited for at most `notesWaitMs`.
+   */
+  async start(): Promise<void> {
     this.setSnapshot(null);
     this.setAsking(null);
-    this.skipOffer = false;
-    this.points = [];
+    this.mainIndex = 0;
+    this.points = this.main.flatMap((beat) => (beat.question && this.remembered.has(beat.question.subject) ? [this.pointFor(beat.question)] : []));
+    this.refreshSkipOffer();
     this.emitPoints();
-    return this.playMain(0);
+    if (this.notesSettled) return this.playMain(0);
+    const my = this.player.begin();
+    await this.waitForNotes();
+    if (!this.player.isCurrent(my)) return;
+    return this.playMain(0, my);
+  }
+
+  /**
+   * "Forget my answers": deletes the saved answers of the listed points (best effort, one DELETE per subject) and turns
+   * them back into unanswered points. Playback goes on; a question beat not reached yet is asked again.
+   */
+  async forget(): Promise<void> {
+    const subjects = [...new Set([...this.points.map((p) => p.subject), ...this.remembered.keys()])];
+    this.forgets++;
+    this.remembered.clear();
+    this.points = this.points.map((p) => (p.answer !== null ? { ...p, answer: null } : p));
+    this.refreshSkipOffer();
+    this.emitPoints();
+    await Promise.all(
+      subjects.map((subject) =>
+        this.fetcher(`${this.notesUrl}?subject=${encodeURIComponent(subject)}`, { method: "DELETE" }).then(
+          () => undefined,
+          () => undefined,
+        ),
+      ),
+    );
   }
 
   /**
@@ -136,8 +187,9 @@ export class Conversation {
     const point = this.points.find((p) => p.subject === key);
     const chosen = point?.answers.find((a) => a.id === id);
     if (!point || !chosen) return Promise.resolve();
+    this.remembered.set(point.subject, chosen.id);
     this.points = this.points.map((p) => (p === point ? { ...p, answer: chosen.id } : p));
-    this.skipOffer = this.points.some((p) => p.answers.some((a) => a.id === p.answer && a.skipOffer));
+    this.refreshSkipOffer();
     this.emitPoints();
     void this.fetcher(this.notesUrl, {
       method: "POST",
@@ -195,6 +247,16 @@ export class Conversation {
     this.interrupt();
     const my = this.player.begin();
     this.setMode("side");
+
+    // "Can you repeat your advice?": replay the last answer word for word. The director has no memory of it,
+    // so asking it again would produce a different, often partial answer.
+    if (this.lastSide && isRepeatRequest(question)) {
+      const script = this.lastSide;
+      this.events.emit({ type: "script", kind: "side", script, source: "prepared" });
+      if (!(await this.player.speak(this.pick(REPEAT_LEADS), my, "filler"))) return;
+      if (!(await this.playSide(script, my))) return;
+      return this.finishSide(my, script);
+    }
 
     // Fast path, before any network call.
     const target = targetIn(question, this.world.focusTargets(), this.world.currentFocus());
@@ -322,12 +384,13 @@ export class Conversation {
     const my = token !== undefined && this.player.isCurrent(token) ? token : this.player.begin();
     this.setMode("presenting");
     this.mainDone = false;
-    if (from === 0) this.events.emit({ type: "script", kind: "main", script: this.main });
+    if (from === 0) this.events.emit({ type: "script", kind: "main", script: this.main.map((_, i) => this.spokenBeat(i)) });
     for (let i = from; i < this.main.length; i++) {
       const beat = this.main[i];
       if (beat.offer && this.skipOffer) continue;
       this.mainIndex = i;
-      const ok = await this.player.playBeat(beat, my, { kind: "main", beatIndex: i, beatCount: this.main.length });
+      // A known answer is never asked again: the beat says its recall line instead (same cues, no pause).
+      const ok = await this.player.playBeat(this.spokenBeat(i), my, { kind: "main", beatIndex: i, beatCount: this.main.length });
       if (!ok) return;
       if (beat.question) {
         // Asked once, never blocking: a short pause for a reply, then on by itself; the point stays open on screen.
@@ -346,6 +409,7 @@ export class Conversation {
   }
 
   private async playSide(script: Script, my: number): Promise<boolean> {
+    this.lastSide = script;
     for (let i = 0; i < script.length; i++) {
       if (script[i].offer && this.skipOffer) continue;
       const ok = await this.player.playBeat(script[i], my, { kind: "side", beatIndex: i, beatCount: script.length });
@@ -397,10 +461,69 @@ export class Conversation {
   private addPoint(question: BeatQuestion): OpenPoint {
     const known = this.points.find((p) => p.subject === question.subject);
     if (known) return known;
-    const point: OpenPoint = { subject: question.subject, label: question.label, assume: question.assume, answers: question.answers, answer: null };
+    const point = this.pointFor(question);
     this.points = [...this.points, point];
     this.emitPoints();
     return point;
+  }
+
+  private pointFor(question: BeatQuestion): OpenPoint {
+    const answer = this.remembered.get(question.subject) ?? null;
+    return { subject: question.subject, label: question.label, assume: question.assume, answers: question.answers, answer };
+  }
+
+  /** Main beat `i` as spoken: with its question's answer known, the recall line replaces the question sentence. */
+  private spokenBeat(i: number): Beat {
+    const beat = this.main[i];
+    const known = beat?.question ? this.remembered.get(beat.question.subject) : undefined;
+    const recall = known !== undefined ? beat.question?.answers.find((a) => a.id === known)?.recall : undefined;
+    return recall ? { ...beat, say: recall } : beat;
+  }
+
+  private refreshSkipOffer(): void {
+    this.skipOffer = this.points.some((p) => p.answers.some((a) => a.id === p.answer && a.skipOffer));
+  }
+
+  /**
+   * Best effort: GET the saved answers and treat them as given in this session. Anything else (offline, an error, a
+   * strange body, a forget() meanwhile) means no notes. Never rejects.
+   */
+  private async loadNotes(): Promise<void> {
+    const forgets = this.forgets;
+    try {
+      const res = await this.fetcher(this.notesUrl, { method: "GET", headers: { Accept: "application/json" }, cache: "no-store" });
+      if (!res.ok) return;
+      const notes: unknown = await res.json();
+      if (!Array.isArray(notes) || forgets !== this.forgets) return;
+      const questions = this.main.flatMap((beat) => (beat.question ? [beat.question] : []));
+      for (const note of notes as SavedNote[]) {
+        const question = questions.find((q) => q.subject === note?.subject);
+        // An answer given in this session wins over the saved one.
+        if (!question || this.remembered.has(question.subject) || !question.answers.some((a) => a.id === note.answer)) continue;
+        this.remembered.set(question.subject, note.answer as string);
+      }
+      // Merge into the list in script order: known points get their answer, the others are added as answered.
+      let points = this.points.map((p) => (p.answer === null && this.remembered.has(p.subject) ? { ...p, answer: this.remembered.get(p.subject)! } : p));
+      for (const question of questions) {
+        if (this.remembered.has(question.subject) && !points.some((p) => p.subject === question.subject)) points = [...points, this.pointFor(question)];
+      }
+      this.points = points;
+      this.refreshSkipOffer();
+      this.emitPoints();
+    } catch {
+      // No notes.
+    }
+  }
+
+  /** Resolves when the saved answers are in, or after `notesWaitMs`, whichever is first. */
+  private waitForNotes(): Promise<void> {
+    return new Promise((done) => {
+      const timer = setTimeout(done, this.notesWaitMs);
+      void this.notesLoad.then(() => {
+        clearTimeout(timer);
+        done();
+      });
+    });
   }
 
   private emitPoints(): void {
@@ -442,7 +565,7 @@ export class Conversation {
   }
 
   private takeSnapshot(): Snapshot {
-    const beat = this.main[this.mainIndex];
+    const beat = this.main[this.mainIndex] ? this.spokenBeat(this.mainIndex) : undefined;
     return {
       scene: this.world.currentScene() ?? beat?.scene?.type ?? "galaxy",
       focus: this.world.currentFocus(),
