@@ -1,0 +1,466 @@
+import { measureAgainstSurplus, type AffordMeasure } from "@/lib/afford";
+import { cardBudgetMonthly, cardCycles, cardPayments } from "@/lib/card-cycle";
+import { detectRecurringPayments, getBalanceSeries } from "@/lib/intelligence";
+import { groupLabels, necessities, necessityLabels, ruleTags, type MerchantTag } from "@/lib/merchant-tags";
+import type { Transaction } from "@/lib/models";
+import { savingsPlan, type Cancellable, type Habit, type SavingsPlan, type Switchable } from "@/lib/savings-plan";
+import { getSpendingProfile, type SpendingProfile } from "@/lib/profile";
+
+/**
+ * Facts summary: everything the agent may say, computed once and placed in the model's context.
+ * The model narrates these figures and refers to insights by id; it never computes or invents numbers.
+ */
+
+export interface UserNote {
+  /** Insight id or `tag:<merchant>` the answer belongs to. */
+  subject: string;
+  /** Machine-readable answer, one of the insight's `answers`. */
+  answer: string;
+  /** The user's own words, for the client file. */
+  text: string;
+  createdAt: string;
+}
+
+export type InsightKind = "what_happened" | "what_is_missing" | "insight" | "advice";
+/** assert: say it. ask: never assert, ask the question. resolved: the user already answered. */
+export type InsightMode = "assert" | "ask" | "resolved";
+
+export interface Insight {
+  id: string;
+  kind: InsightKind;
+  mode: InsightMode;
+  /** Code-written, figure-exact summary; the model may rephrase but not change numbers. */
+  summary: string;
+  figures: Record<string, number | string>;
+  question?: string;
+  answers?: string[];
+  userAnswer?: string;
+  evidence: string[];
+}
+
+export interface FactsSummary {
+  currency: string;
+  periodStart: string;
+  periodEnd: string;
+  labels: { necessity: typeof necessityLabels; groups: typeof groupLabels };
+  income: SpendingProfile["income"];
+  spending: SpendingProfile["spending"];
+  byNecessity: { necessity: string; label: string; yearly: number; monthly: number; share: number }[];
+  topGroups: { group: string; label: string; net: number; necessity: string }[];
+  /** Salary minus fixed costs; an upper bound, since spending paid from other accounts is not in the data (see accounts_complete). */
+  monthlyRoomAfterCompulsory: number;
+  /**
+   * "Can I afford it?": the amount compared with what the private account kept last year (an upper bound while
+   * accounts_complete is unanswered). ordinarySurplus = yearNet without the extra salary; example = the fixed 3,000 case.
+   */
+  affordability: {
+    yearNet: number;
+    extraSalary: number;
+    ordinarySurplus: number;
+    monthlySurplus: number;
+    months: number;
+    example: AffordMeasure;
+  } | null;
+  levers: {
+    adjustable: { merchant: string; yearly: number }[];
+    flexibleHabits: { merchant: string; yearly: number; purchases: number }[];
+  };
+  /**
+   * "How can I save X a month?": the repeated habits a cut can come from (refund-heavy and stopped ones left out),
+   * and the plan for the fixed 100 franc example. `each` in a cut is the average price of one purchase.
+   * cancel: active subscriptions she could drop (savesMonthly / savesYearly are the full amounts, largest first).
+   * switch: active payments she needs where a cheaper provider or plan is the lever (costsMonthly only, largest first).
+   * Both come from the recurring payments and the merchant tags' `lever`.
+   */
+  savings: { habits: Habit[]; excluded: string[]; example: SavingsPlan; cancel: Cancellable[]; switch: Switchable[] };
+  /** The one option the advisor may offer; confirmed by touch only. */
+  offer: { product: string; monthly: number; after_one_year: number };
+  insights: Insight[];
+  openQuestions: { subject: string; question: string; answers: string[] }[];
+  notes: { subject: string; answer: string; text: string }[];
+  assumptions: string[];
+}
+
+/** The fixed "Can I afford a 3,000 franc laptop?" example, precomputed. */
+export const AFFORD_EXAMPLE_AMOUNT = 3000;
+
+/** The fixed "How can I save 100 francs a month?" example. */
+export const SAVINGS_EXAMPLE_TARGET = 100;
+
+/** Swiss pillar 3a maximum for employees with a pension fund, 2025. */
+export const PILLAR_3A_LIMIT_2025 = 7258;
+
+/** The single offer: CHF 200 a month into pillar 3a. */
+export const OFFER = { product: "pillar 3a", monthly: 200, after_one_year: 2400 } as const;
+
+const round = (value: number) => Math.round(value * 100) / 100;
+const month = (date: string) => date.slice(0, 7);
+const median = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+const chf = (value: number) => `${Math.round(value).toLocaleString("de-CH")} CHF`;
+
+function monthsBetween(start: string, end: string) {
+  const months: string[] = [];
+  let [year, value] = start.slice(0, 7).split("-").map(Number);
+  const last = end.slice(0, 7);
+  while (`${year}-${String(value).padStart(2, "0")}` <= last) {
+    months.push(`${year}-${String(value).padStart(2, "0")}`);
+    value += 1;
+    if (value > 12) { value = 1; year += 1; }
+  }
+  return months;
+}
+
+export function buildFacts(transactions: Transaction[], currency: string, tags: MerchantTag[] = ruleTags(), notes: UserNote[] = []): FactsSummary {
+  const selected = transactions.filter((t) => t.currency === currency);
+  const noteBy = new Map(notes.map((n) => [n.subject, n]));
+  const insights: Insight[] = [];
+  const add = (insight: Omit<Insight, "mode" | "userAnswer"> & { mode: "assert" | "ask" }) => {
+    const note = noteBy.get(insight.id);
+    insights.push(note && insight.mode === "ask" ? { ...insight, mode: "resolved", userAnswer: note.answer } : insight);
+  };
+
+  // Accounts: the one receiving income is the private account; the one receiving transfers is the card.
+  const privateAccount = selected.find((t) => t.type === "income")?.account;
+  const cardAccount = selected.find((t) => t.type === "transfer" && t.amount > 0)?.account;
+  const expenses = selected.filter((t) => t.type === "expense");
+  const refunds = selected.filter((t) => t.type === "refund");
+
+  // The pot shrinks when the user confirms a charge was a duplicate.
+  const duplicates = notes.filter((n) => n.subject.startsWith("double_charge:") && n.answer === "duplicate");
+  const profileTransactions = duplicates.length
+    ? selected.filter((t) => !duplicates.some((d) => d.subject === `double_charge:${t.merchant}:${t.date}` && t.id === findDuplicateId(selected, t.merchant, t.date)))
+    : selected;
+  const profile = getSpendingProfile(profileTransactions, currency, tags);
+  const periodStart = profile.periodStart;
+  const periodEnd = profile.periodEnd;
+  let affordability: FactsSummary["affordability"] = null;
+
+  // 1. Year-end result and how much of it is the extra (13th) salary.
+  if (privateAccount) {
+    const yearNet = round(selected.filter((t) => t.account === privateAccount).reduce((sum, t) => sum + t.amount, 0));
+    const extra = profile.income.aboveBase;
+    add({
+      id: "year_end_buffer",
+      kind: "what_happened",
+      mode: "assert",
+      summary: `The private account ended the year ${chf(yearNet)} higher than it started. Without the extra salary payment of ${chf(extra)} it would have been ${chf(yearNet - extra)}.`,
+      figures: { yearNet, extraSalary: extra, yearNetWithoutExtra: round(yearNet - extra), baseMonthlySalary: profile.income.baseMonthly },
+      evidence: selected.filter((t) => t.type === "income").map((t) => t.id)
+    });
+
+    // 1b. "Can I afford it?" numbers for the director: the amount against what was kept last year.
+    const months = (Number(periodEnd.slice(0, 4)) - Number(periodStart.slice(0, 4))) * 12 + Number(periodEnd.slice(5, 7)) - Number(periodStart.slice(5, 7)) + 1;
+    const surplus = { yearNet, extraSalary: extra, months };
+    const example = measureAgainstSurplus(AFFORD_EXAMPLE_AMOUNT, surplus);
+    affordability = { yearNet, extraSalary: extra, ordinarySurplus: example.ordinarySurplus, monthlySurplus: example.monthlySurplus, months, example };
+
+    // 2. Lowest point of the private account, relative to the start of the year.
+    const balance = getBalanceSeries(selected, currency, 0, privateAccount);
+    if (balance.lowestMonthEnd && balance.lowestDay && balance.lowestDay.balance < 0) {
+      add({
+        id: "lowest_balance",
+        kind: "what_happened",
+        mode: "assert",
+        summary: `Measured from the start of the year, the private account was lowest at the end of ${balance.lowestMonthEnd.date.slice(0, 7)} (${chf(balance.lowestMonthEnd.balance)}) and on ${balance.lowestDay.date} (${chf(balance.lowestDay.balance)}).`,
+        figures: { lowestMonthEnd: balance.lowestMonthEnd.balance, lowestMonthEndMonth: balance.lowestMonthEnd.date.slice(0, 7), lowestDay: balance.lowestDay.balance, lowestDayDate: balance.lowestDay.date },
+        evidence: []
+      });
+    }
+  }
+
+  // 3. Card statements compared with the monthly salary.
+  if (cardAccount) {
+    const statements = selected.filter((t) => t.account === cardAccount && t.type === "transfer" && t.amount > 0);
+    const largest = [...statements].sort((a, b) => b.amount - a.amount)[0];
+    if (largest) {
+      const aboveSalary = statements.filter((t) => t.amount > profile.income.baseMonthly);
+      add({
+        id: "statement_shock",
+        kind: "what_happened",
+        mode: "assert",
+        summary: `The largest card statement was ${chf(largest.amount)} in ${month(largest.date)}; ${aboveSalary.length} statement(s) were larger than the monthly salary of ${chf(profile.income.baseMonthly)}.`,
+        figures: {
+          largestStatement: largest.amount,
+          largestStatementMonth: month(largest.date),
+          statementsAboveSalary: aboveSalary.length,
+          smallestStatement: Math.min(...statements.map((t) => t.amount)),
+          baseMonthlySalary: profile.income.baseMonthly
+        },
+        evidence: statements.map((t) => t.id)
+      });
+    }
+  }
+
+  // 3b. Card cycle: the statement equals net card spending since the previous payment; the monthly card budget is
+  //     the base salary minus average monthly private spending (card payments excluded).
+  const cardBudget = cardBudgetMonthly(selected);
+  const cycles = cardCycles(selected, cardBudget).filter((c) => c.paymentDate !== null);
+  if (cardAccount && cycles.length && cardBudget > 0) {
+    const over = cycles.filter((c) => c.crossedOn !== null);
+    const worst = [...cycles].sort((a, b) => b.spent - a.spent)[0];
+    add({
+      id: "card_cycle",
+      kind: "insight",
+      mode: "assert",
+      summary: `The monthly card budget is ${chf(cardBudget)} (salary minus average account spending). ${over.length} of ${cycles.length} card cycles went over it; the largest, ending ${worst.paymentDate}, reached ${chf(worst.spent)} and crossed the budget on ${worst.crossedOn}.`,
+      figures: {
+        cardBudgetMonthly: cardBudget,
+        cyclesOverBudget: over.length,
+        cycles: cycles.length,
+        worstCycleSpent: worst.spent,
+        worstCycleEnd: worst.paymentDate ?? "",
+        worstCycleCrossedOn: worst.crossedOn ?? ""
+      },
+      evidence: []
+    });
+  }
+
+  // 4. A regular obligation that skipped a month.
+  const allMonths = monthsBetween(periodStart, periodEnd);
+  for (const m of profile.merchants.filter((p) => p.necessity === "compulsory" && p.pattern === "regular")) {
+    const paid = expenses.filter((t) => t.merchant === m.merchant);
+    const paidMonths = new Set(paid.map((t) => month(t.date)));
+    const usual = round(median(paid.map((t) => Math.abs(t.amount))));
+    for (const gap of allMonths.filter((value) => !paidMonths.has(value))) {
+      add({
+        id: `missing_payment:${m.merchant}:${gap}`,
+        kind: "what_is_missing",
+        mode: "ask",
+        summary: `${m.merchant} was paid in ${paidMonths.size} of ${allMonths.length} months, usually ${chf(usual)}; there is no payment in ${gap}.`,
+        figures: { merchant: m.merchant, missingMonth: gap, usualAmount: usual, monthsPaid: paidMonths.size },
+        question: `I don't see your ${m.merchant} payment for ${gap}. Was it paid from another account?`,
+        answers: ["paid_elsewhere", "missed"],
+        evidence: paid.map((t) => t.id)
+      });
+    }
+  }
+
+  // 5. Things that never started: retirement (3a) or savings transfers.
+  const savingsLike = selected.filter((t) => t.type === "investment" || /\b3a\b|säule|saule|pillar|sparkonto|savings/i.test(`${t.description} ${t.merchant}`));
+  if (!savingsLike.length) {
+    add({
+      id: "no_pillar_3a",
+      kind: "what_is_missing",
+      mode: "ask",
+      summary: `There is no 3a payment or savings transfer in ${periodStart.slice(0, 4)}. The 3a maximum for employees with a pension fund is ${chf(PILLAR_3A_LIMIT_2025)}.`,
+      figures: { pillar3aLimit: PILLAR_3A_LIMIT_2025, savingsTransfers: 0 },
+      question: "I don't see any 3a or savings payments this year. Do you have a 3a account at another bank?",
+      answers: ["has_elsewhere", "none"],
+      evidence: []
+    });
+  }
+
+  // 5b. Is this everything? No groceries and no cash withdrawals suggests spending paid from another account.
+  const everyday = /migros|\bcoop\b(?!.*tankstelle)|denner|aldi|lidl|\bspar\b|volg|supermar|grocer|lebensmittel/i;
+  const cash = /bancomat|\batm\b|geldautomat|bargeld|geldbezug|cash/i;
+  const groceryTagged = new Set(tags.filter((tag) => /grocer|supermarket/i.test(tag.reason)).map((tag) => tag.merchant));
+  const groceries = expenses.filter((t) => groceryTagged.has(t.merchant) || everyday.test(`${t.merchant} ${t.description}`));
+  const withdrawals = selected.filter((t) => t.amount < 0 && cash.test(`${t.merchant} ${t.description}`));
+  const accounts = new Set(selected.map((t) => t.account)).size;
+  if (!groceries.length && !withdrawals.length) {
+    add({
+      id: "accounts_complete",
+      kind: "what_is_missing",
+      mode: "ask",
+      summary: `The ${accounts} accounts show no grocery shopping and no cash withdrawals in ${periodStart.slice(0, 4)}, so some everyday spending may be paid another way.`,
+      figures: { accounts, groceryPayments: 0, cashWithdrawals: 0 },
+      question: "I see no groceries or cash withdrawals here. Do you have another account, or pay daily shopping another way?",
+      answers: ["has_other", "complete"],
+      evidence: []
+    });
+  }
+
+  // 5c. Tax: payments found against yearly income. Never state or estimate what the tax bill should be.
+  const taxPayments = expenses.filter((t) => /Steuer/i.test(t.merchant));
+  if (taxPayments.length) {
+    const taxPaid = round(taxPayments.reduce((sum, t) => sum - t.amount, 0));
+    add({
+      id: "tax_provision",
+      kind: "what_is_missing",
+      mode: "ask",
+      summary: `${taxPayments.length} tax payments of ${chf(taxPaid)} in total were found against ${chf(profile.income.total)} of income.`,
+      figures: { taxPayments: taxPayments.length, taxPaid, yearlyIncome: profile.income.total },
+      question: "I see a few tax payments. Is tax taken from your salary, or paid from another account?",
+      answers: ["handled_elsewhere", "not_yet"],
+      evidence: taxPayments.map((t) => t.id)
+    });
+  }
+
+  // 6. Possible double charge: same merchant, day and amount, twice, never refunded,
+  //    and not part of a group booking (another identical pair in the same spending group within 2 days).
+  const pairs = new Map<string, Transaction[]>();
+  for (const t of expenses) {
+    const key = `${t.merchant}|${t.date}|${t.amount}`;
+    pairs.set(key, [...(pairs.get(key) ?? []), t]);
+  }
+  const groupOf = (merchant: string) => tags.find((tag) => tag.merchant === merchant)?.group ?? "Other";
+  const twoOfAKind = [...pairs.values()].filter((items) => items.length === 2 && Math.abs(items[0].amount) >= 100);
+  const days = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
+  for (const items of twoOfAKind) {
+    const [first] = items;
+    const amount = Math.abs(first.amount);
+    const refunded = refunds.some((r) => r.merchant === first.merchant && Math.abs(r.amount - amount) <= amount * 0.05 && days(r.date, first.date) <= 60);
+    const groupBooking = twoOfAKind.some((other) => other !== items && groupOf(other[0].merchant) === groupOf(first.merchant) && days(other[0].date, first.date) <= 2);
+    if (refunded || groupBooking) continue;
+    add({
+      id: `double_charge:${first.merchant}:${first.date}`,
+      kind: "insight",
+      mode: "ask",
+      summary: `${first.merchant} charged ${chf(amount)} twice on ${first.date} and nothing was refunded.`,
+      figures: { merchant: first.merchant, date: first.date, amount, charges: 2 },
+      question: `${first.merchant} charged you ${amount.toFixed(2)} CHF twice on ${first.date}. Was that two bookings, or should we dispute one?`,
+      answers: ["legit", "duplicate"],
+      evidence: items.map((t) => t.id)
+    });
+  }
+
+  // 7. The list misleads: merchants whose refunds cancel most of the purchases.
+  for (const m of profile.merchants.filter((p) => p.gross >= 1000 && p.refunds / p.gross >= 0.5)) {
+    add({
+      id: `refund_heavy:${m.merchant}`,
+      kind: "insight",
+      mode: "assert",
+      summary: `${m.merchant} shows ${chf(m.gross)} in ${m.count} purchases, but ${chf(m.refunds)} came back; the real cost is ${chf(m.net)}.`,
+      figures: { merchant: m.merchant, gross: m.gross, refunds: m.refunds, net: m.net, purchases: m.count },
+      evidence: [...expenses, ...refunds].filter((t) => t.merchant === m.merchant).map((t) => t.id)
+    });
+  }
+
+  // 8. Habit change: a frequent merchant that went quiet for the last months.
+  const quietAfter = monthsBetween(periodStart, periodEnd).at(-5);
+  for (const m of profile.merchants.filter((p) => p.count >= 8)) {
+    const last = expenses.filter((t) => t.merchant === m.merchant).map((t) => t.date).sort().at(-1)!;
+    if (quietAfter && month(last) < quietAfter) {
+      add({
+        id: `habit_stopped:${m.merchant}`,
+        kind: "insight",
+        mode: "assert",
+        summary: `${m.count} purchases at ${m.merchant} (${chf(m.net)}) until ${month(last)}, then none.`,
+        figures: { merchant: m.merchant, purchases: m.count, net: m.net, lastMonth: month(last) },
+        evidence: expenses.filter((t) => t.merchant === m.merchant).map((t) => t.id)
+      });
+    }
+  }
+
+  // 9. The one piece of advice: a monthly pot for big one-off purchases (confirmed by tap, never by voice).
+  if (profile.levers.oneOffs.length) {
+    add({
+      id: "one_off_pot",
+      kind: "advice",
+      mode: "assert",
+      summary: `${profile.levers.oneOffs.length} big one-off purchases cost ${chf(profile.levers.oneOffTotal)} this year. Setting aside ${chf(profile.levers.monthlyPotForOneOffs)} a month would cover them without a statement shock.`,
+      figures: { oneOffTotal: profile.levers.oneOffTotal, monthlyPot: profile.levers.monthlyPotForOneOffs, purchases: profile.levers.oneOffs.length },
+      evidence: []
+    });
+  }
+
+  // Uncertain merchant tags become questions too.
+  for (const tag of tags.filter((t) => t.askUser)) {
+    if (!profile.merchants.some((m) => m.merchant === tag.merchant)) continue;
+    add({
+      id: `tag:${tag.merchant}`,
+      kind: "insight",
+      mode: "ask",
+      summary: `${tag.merchant} is tagged as ${necessityLabels[tag.necessity]} (${tag.reason}), but this is uncertain.`,
+      figures: { merchant: tag.merchant, necessity: tag.necessity },
+      question: tag.askUser,
+      answers: ["yes", "no"],
+      evidence: []
+    });
+  }
+
+  return {
+    currency,
+    periodStart,
+    periodEnd,
+    labels: { necessity: necessityLabels, groups: groupLabels },
+    income: profile.income,
+    spending: profile.spending,
+    byNecessity: necessities.map((necessity) => ({
+      necessity,
+      label: necessityLabels[necessity],
+      yearly: profile.byNecessity[necessity].net,
+      monthly: profile.byNecessity[necessity].monthly,
+      share: profile.byNecessity[necessity].share
+    })),
+    topGroups: profile.groups.slice(0, 8).map((g) => ({ group: g.group, label: groupLabels[g.group], net: g.net, necessity: g.necessity })),
+    monthlyRoomAfterCompulsory: profile.monthlyRoomAfterCompulsory,
+    affordability,
+    levers: {
+      adjustable: profile.levers.adjustable.map((m) => ({ merchant: m.merchant, yearly: m.net })),
+      flexibleHabits: profile.levers.flexibleHabits.map((m) => ({ merchant: m.merchant, yearly: m.net, purchases: m.count }))
+    },
+    savings: savingsOf(profile, insights, selected, tags),
+    offer: { ...OFFER },
+    insights,
+    openQuestions: insights.filter((i) => i.mode === "ask").map((i) => ({ subject: i.id, question: i.question!, answers: i.answers! })),
+    notes: notes.map((n) => ({ subject: n.subject, answer: n.answer, text: n.text })),
+    assumptions: [
+      ...profile.assumptions,
+      "Balances are measured from the start of the period (opening balance unknown, taken as 0).",
+      ...(insights.some((i) => i.id === "accounts_complete" && i.userAnswer === "complete")
+        ? []
+        : [
+            "These two accounts may not be all of her spending (no groceries or cash withdrawals): monthlyRoomAfterCompulsory is an upper bound before any spending paid another way; say 'at most', never present it as free money."
+          ]),
+      "affordability compares an amount with what was kept last year; it is not a forecast. Describe consequences only, never say whether to buy.",
+      "Insights in mode 'ask' must be asked, never stated as fact; 'resolved' ones use the user's answer."
+    ]
+  };
+}
+
+/** Habits a monthly saving can come from, the recurring payments she could cancel or switch, and the plan for the fixed example. */
+function savingsOf(profile: SpendingProfile, insights: Insight[], transactions: Transaction[], tags: MerchantTag[]): FactsSummary["savings"] {
+  const habits: Habit[] = [...profile.levers.adjustable, ...profile.levers.flexibleHabits].map((m) => ({ merchant: m.merchant, group: m.group, yearly: m.net, purchases: m.count }));
+  const excluded = insights.filter((i) => i.id.startsWith("refund_heavy:") || i.id.startsWith("habit_stopped:")).map((i) => String(i.figures.merchant));
+  const { cancel, switch: switchable } = recurringLevers(transactions, profile.currency, tags);
+  return { habits, excluded, example: savingsPlan(SAVINGS_EXAMPLE_TARGET, habits, profile.months, excluded, cancel), cancel, switch: switchable };
+}
+
+/** Active recurring payments whose merchant tag carries a lever; an untagged one (rent) is neither. Largest first. */
+export function recurringLevers(transactions: Transaction[], currency: string, tags: MerchantTag[] = ruleTags()) {
+  const cancel: Cancellable[] = [];
+  const switchable: Switchable[] = [];
+  for (const flow of detectRecurringPayments(transactions, currency).filter((f) => f.active)) {
+    const tag = tags.find((t) => t.merchant === flow.name);
+    if (!tag?.lever) continue;
+    const name = tag.lever.name ?? tag.merchant;
+    if (tag.lever.kind === "cancel") {
+      cancel.push({ merchant: tag.merchant, name, group: tag.group, savesMonthly: Math.round(flow.monthlyAmount), savesYearly: Math.round(flow.monthlyAmount * 12) });
+    } else {
+      switchable.push({ merchant: tag.merchant, name, group: tag.group, costsMonthly: Math.round(flow.monthlyAmount), how: tag.lever.how ?? "comparing offers" });
+    }
+  }
+  cancel.sort((a, b) => b.savesMonthly - a.savesMonthly);
+  switchable.sort((a, b) => b.costsMonthly - a.costsMonthly);
+  return { cancel, switch: switchable };
+}
+
+/** The second of two identical charges; removed from the profile when the user confirms a duplicate. */
+function findDuplicateId(transactions: Transaction[], merchant: string, date: string) {
+  return transactions.filter((t) => t.type === "expense" && t.merchant === merchant && t.date === date).sort((a, b) => a.id.localeCompare(b.id))[1]?.id;
+}
+
+/** Compact JSON for the system prompt (evidence ids dropped to save tokens). */
+export function factsForPrompt(facts: FactsSummary) {
+  return JSON.stringify({ ...facts, insights: facts.insights.map(({ evidence, ...rest }) => rest) });
+}
+
+/** Every number the agent is allowed to say; use it to reject scripts with invented figures. */
+export function allowedNumbers(facts: FactsSummary): Set<number> {
+  const numbers = new Set<number>();
+  const walk = (value: unknown) => {
+    if (typeof value === "number") {
+      numbers.add(round(value));
+      numbers.add(Math.round(value));
+      numbers.add(Math.round(Math.abs(value)));
+    } else if (Array.isArray(value)) value.forEach(walk);
+    else if (value && typeof value === "object") Object.values(value).forEach(walk);
+  };
+  walk(facts);
+  return numbers;
+}

@@ -1,0 +1,215 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { getTransactions } from "../lib/database";
+import { buildSeries, totalOf } from "../lib/director/series";
+import { extractNumbers, validateScript, type ValidationContext } from "../lib/director/validate";
+import fs from "node:fs";
+import { SIDE_ANSWERS } from "../content/scripts";
+import type { Script } from "../lib/contracts";
+import { allowedNumbers, buildFacts } from "../lib/facts";
+import { loadAccountCsv } from "../lib/load-accounts";
+import { buildDataBlock, DIRECTOR_INSTRUCTIONS } from "../lib/director/prompt";
+import { runDirectorTool, type DirectorToolContext } from "../lib/director/tools";
+import type { Transaction } from "../lib/models";
+
+const monthlySpending = [5994, 7063, 6028, 6626, 6435, 10365, 12363, 4565, 14363, 3845, 7390, 3342];
+// Series values the facts/series would provide; 14363 is September's spending.
+const ctx = (overrides: Partial<ValidationContext> = {}): ValidationContext => ({
+  currentScene: "monthly",
+  allowed: new Set([...monthlySpending, 2273, 7458, 982]),
+  monthTotals: monthlySpending,
+  ...overrides
+});
+
+test("series helper returns the 12 monthly spending values", async () => {
+  const series = buildSeries(await getTransactions(), "CHF", 2025);
+  assert.deepEqual(series.monthlySpending, monthlySpending);
+  assert.equal(series.cardBill.length, 12);
+  assert.equal(totalOf(series, "monthly_spending", [1, 2]), 5994 + 7063);
+  assert.equal(totalOf(series, "monthly_spending", [13]), null);
+});
+
+test("validator drops a beat with an invented number, accepts 14363 and 14,363", () => {
+  const result = validateScript(
+    {
+      script: [
+        { say: "September cost 9,876 francs.", scene: { type: "monthly", focus: 9 } },
+        { say: "September cost 14,363 francs.", scene: { type: "monthly", focus: 9 } },
+        { say: "That is 14363 francs in September.", cues: [{ word: "francs" }] }
+      ]
+    },
+    ctx()
+  );
+  assert.ok(result.ok);
+  assert.equal(result.script.length, 2);
+  assert.equal(result.script[0].say, "September cost 14,363 francs.");
+  assert.equal(result.dropped.length, 1);
+  assert.deepEqual(extractNumbers("About 14,363 or 14'363 in month 9"), [14363, 14363, 9]);
+});
+
+test("validator accepts a sum from the total tool and rounding to the nearest 100", () => {
+  const ok = validateScript([{ say: "June and July together are 22,728 francs." }, { say: "That is about 14,400 francs." }], ctx({ toolResults: [22728] }));
+  assert.ok(ok.ok);
+  assert.equal(ok.script.length, 2);
+  const bad = validateScript([{ say: "June and July together are 22,728 francs." }], ctx());
+  assert.equal(bad.ok, false);
+});
+
+test("validator truncates say, forces the first scene and checks cues", () => {
+  const long = `Spending ${"word ".repeat(80)}ends`;
+  const result = validateScript(
+    [{ say: long, scene: { type: "galaxy" }, cues: [{ word: "Spending" }, { word: "missing" }, { word: "word" }, { word: "ends" }, { word: "word" }] }, { say: "Next.", scene: { type: "nope" } }],
+    ctx()
+  );
+  assert.ok(result.ok);
+  assert.ok(result.script[0].say.length <= 260);
+  assert.deepEqual(result.script[0].scene, { type: "monthly" });
+  // The first word, the missing word, the truncated-away word and the duplicate are dropped.
+  assert.deepEqual(result.script[0].cues?.map((c) => c.word), ["word"]);
+  assert.equal(result.script[1].scene?.type, "monthly");
+});
+
+test("breakdown: 3 % rule, Other remainder, invented values", () => {
+  const withParts = (parts: { name: string; value: number }[]) =>
+    validateScript([{ say: "September is high because of tickets.", scene: { type: "monthly", focus: 9, breakdown: { month: 9, parts } } }], ctx());
+
+  const normal = withParts([{ name: "Plane tickets", value: 7458 }, { name: "Apple", value: 2273 }, { name: "Health insurance", value: 982 }]);
+  assert.ok(normal.ok);
+  const parts = normal.script[0].scene!.breakdown!.parts;
+  assert.deepEqual(parts.at(-1), { name: "Other", value: 14363 - 7458 - 2273 - 982 });
+
+  const tooBig = withParts([{ name: "Plane tickets", value: 7458 }, { name: "Apple", value: 7458 }, { name: "Health insurance", value: 982 }]);
+  assert.ok(tooBig.ok);
+  assert.equal(tooBig.script[0].scene!.breakdown, undefined);
+
+  const invented = withParts([{ name: "Plane tickets", value: 7777 }]);
+  assert.equal(invented.ok, false);
+});
+
+test("a day after a month name is not a spoken number", () => {
+  assert.deepEqual(extractNumbers("On September 18 you had 14,363 francs, by 18 September or the 18th."), [14363]);
+  assert.deepEqual(extractNumbers("September 14,363 francs"), [14363]);
+});
+
+const booking = (id: string, date: string, merchant: string, amount: number, type: Transaction["type"] = "expense"): Transaction => ({
+  id, date, description: merchant, amount, originalAmount: amount, currency: "CHF", category: "Shopping", type,
+  account: "KK-Konto", merchant, isRecurring: false, confidence: 1
+});
+
+test("runDirectorTool: find_transactions nets refunds, rejects bad input, collects numbers", () => {
+  const transactions = [
+    booking("1", "2025-05-02", "Zalando", -200),
+    booking("2", "2025-05-10", "Zalando", 50, "refund"),
+    booking("3", "2025-06-01", "Zalando", -120),
+    booking("4", "2025-05-03", "Migros", -80),
+    booking("5", "2025-05-04", "Card payment", -999, "transfer")
+  ];
+  const tc: DirectorToolContext = { series: buildSeries(transactions, "CHF", 2025), transactions, currency: "CHF", asOf: "2025-06-01" };
+
+  const found = runDirectorTool("find_transactions", { merchant: "zAlAnDo", to: "2025-05-31" }, tc);
+  assert.equal(found.isError, false);
+  const result = JSON.parse(found.text);
+  assert.equal(result.count, 2);
+  assert.equal(result.net_total, 150);
+  assert.deepEqual(result.largest, [{ date: "2025-05-02", merchant: "Zalando", amount: 200 }]);
+  assert.ok([2, 150, 200].every((n) => found.numbers.includes(n)));
+
+  // Transfers never count; a date range alone works.
+  assert.equal(JSON.parse(runDirectorTool("find_transactions", '{"from":"2025-05-01","to":"2025-05-31"}', tc).text).net_total, 230);
+
+  assert.equal(runDirectorTool("find_transactions", {}, tc).isError, true);
+  assert.equal(runDirectorTool("find_transactions", { from: "May 1" }, tc).isError, true);
+  assert.equal(runDirectorTool("total", { series: "monthly_spending", months: [13] }, tc).isError, true);
+  assert.equal(runDirectorTool("nope", {}, tc).isError, true);
+  assert.deepEqual(runDirectorTool("total", { series: "monthly_spending", months: [5, 6] }, tc).numbers, [350]);
+});
+
+test("runDirectorTool: recurring_payments and forecast use the data's date, not today", () => {
+  const transactions: Transaction[] = [];
+  // Store has monthly dates but unstable amounts, so it is variable spending, not a regular payment.
+  const store = [300, 900, 450, 800, 200, 500];
+  ["07", "08", "09", "10", "11", "12"].forEach((m, i) => {
+    transactions.push({ ...booking(`rent-${m}`, `2025-${m}-01`, "Rent", -1820), category: "Housing" });
+    transactions.push({ ...booking(`pay-${m}`, `2025-${m}-25`, "Employer", 7000, "income"), category: "Income" });
+    transactions.push(booking(`shop-${m}`, `2025-${m}-12`, "Store", -store[i]));
+  });
+  transactions.push(booking("refund", "2025-12-14", "Store", 200, "refund"));
+  const tc: DirectorToolContext = { series: buildSeries(transactions, "CHF", 2025), transactions, currency: "CHF", asOf: "2025-12-25" };
+
+  const recurring = runDirectorTool("recurring_payments", {}, tc);
+  assert.deepEqual(JSON.parse(recurring.text), [
+    { name: "Rent", cadence: "monthly", typical_amount: 1820, count: 6, total_paid: 10920, last_date: "2025-12-01", active: true }
+  ]);
+  assert.ok(recurring.numbers.includes(10920));
+
+  const forecast = runDirectorTool("forecast", "{}", tc);
+  const result = JSON.parse(forecast.text);
+  assert.equal(result.as_of, "2025-12-25");
+  assert.equal(result.regular_expenses_monthly, 1820);
+  // Store spending of the last three months, net of the December refund: (800 + 200 + 300) / 3.
+  assert.equal(result.variable_expenses_monthly, 433);
+  assert.ok(Math.abs(result.days_30.net - (result.days_30.income - result.days_30.expenses)) <= 1);
+  assert.ok(result.days_30.income > 6800 && result.days_30.income < 7000);
+  assert.ok(forecast.numbers.includes(result.days_90.expenses));
+});
+
+test("no beat left means failure", () => {
+  assert.equal(validateScript({ script: [{ scene: { type: "monthly" } }] }, ctx()).ok, false);
+  assert.equal(validateScript("nope", ctx()).ok, false);
+});
+
+const load = (file: string) => loadAccountCsv(fs.readFileSync(`data/${file}`, "utf8"), file).transactions;
+
+test("savings and habit questions: prompt carries the levers and the one option", async () => {
+  const transactions = [...load("Account1.csv"), ...load("Account3.csv")];
+  const facts = buildFacts(transactions, "CHF");
+  const block = buildDataBlock(facts, buildSeries(transactions, "CHF", 2025));
+  for (const needle of ["byNecessity", "monthlyRoomAfterCompulsory", "flexibleHabits", "Kantine AG", "refund_heavy:Abercrombie & Fitch", "habit_stopped:Digitec Galaxus", "one_off_pot", "savesYearly", "costsMonthly"]) {
+    assert.ok(block.includes(needle), needle);
+  }
+  for (const needle of ["levers.adjustable", "levers.flexibleHabits", "pillar 3a", "\"offer\": true", "never \"unnecessary\""]) {
+    assert.ok(DIRECTOR_INSTRUCTIONS.includes(needle), needle);
+  }
+});
+
+test("validator accepts savings advice with profile numbers and keeps the offer only on the last 3a beat", async () => {
+  const transactions = [...load("Account1.csv"), ...load("Account3.csv")];
+  const allowed = allowedNumbers(buildFacts(transactions, "CHF"));
+  const script = [
+    { say: "Each month, 3,081 francs are fixed, 297 adjustable and 3,988 flexible.", scene: { type: "pools" }, cues: [{ word: "fixed", target: "Housing" }] },
+    { say: "After the fixed costs, 4,383 francs are left each month.", offer: true },
+    { say: "Small levers: the canteen, 1,616 francs, and habits like Orell Fuessli, 1,747 in 24 purchases." },
+    { say: "If you like, 200 francs a month into pillar 3a makes 2,400 in a year.", scene: { type: "jars", focus: "3a" }, offer: true }
+  ];
+  const result = validateScript(script, ctx({ currentScene: "pools", allowed }));
+  assert.ok(result.ok);
+  assert.equal(result.script.length, 4);
+  assert.deepEqual(result.script.map((b) => b.offer ?? false), [false, false, false, true]);
+  const none = validateScript(script, ctx({ currentScene: "pools", allowed, allowOffer: false }));
+  assert.ok(none.ok && none.script.every((b) => !b.offer));
+  const invented = validateScript([{ say: "You would save 1,234 francs by cutting the canteen." }], ctx({ allowed }));
+  assert.equal(invented.ok, false);
+});
+
+test("prepared answers cover saving and habit questions without stealing month or savings-balance questions", () => {
+  const match = (question: string) => SIDE_ANSWERS.find((a) => a.match(question))?.id;
+  for (const q of ["How can I save money?", "Where can I cut?", "What can I do better?"]) assert.equal(match(q), "save", q);
+  for (const q of ["What do you think of my spending habits?", "What patterns do you see?"]) assert.equal(match(q), "habits", q);
+  assert.equal(match("How can I save in November?"), "november");
+  assert.equal(match("Why is September so high?"), "september");
+  assert.equal(match("what about my savings?"), undefined);
+  // Month answers keep the "why was it high" story; anything more specific goes to the live director first.
+  const live = (question: string) => !!SIDE_ANSWERS.find((a) => a.match(question))?.live?.(question);
+  for (const q of ["Wait, why is September so high?", "Why was November high?", "June?", "Let's look at July", "What happened in June?"]) assert.equal(live(q), false, q);
+  for (const q of ["How much did I spend at Digitec in June?", "What was my card bill in September?", "How can I save in November?", "What did I buy on 18 September?"])
+    assert.equal(live(q), true, q);
+  const save = SIDE_ANSWERS.find((a) => a.id === "save")!.script as Script;
+  assert.equal(save.filter((b) => b.offer).length, 1);
+  assert.ok(save.at(-1)?.offer);
+  // Something she can do first (cancel, then switch), never the fixed / flexible statistics.
+  assert.match(save[0].say, /Netflix.*21 francs a month, 251 a year: small/);
+  assert.match(save[1].say, /health insurance costs 982 francs/);
+  assert.ok(!/sav/.test(save[1].say), "no saving figure for a switch");
+  assert.ok(!save.some((b) => /\b(fixed|flexible|adjustable)\b/.test(b.say)));
+  assert.ok(!(SIDE_ANSWERS.find((a) => a.id === "habits")!.script as Script).some((b) => b.offer));
+});

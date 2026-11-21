@@ -1,1 +1,11 @@
 node_modules
+<<<<<<< HEAD
+=======
+.next
+.env
+.env.local
+*.tsbuildinfo
+next-env.d.ts
+*.sqlite-wal
+*.sqlite-shm
+>>>>>>> pfagent
