@@ -1,4 +1,5 @@
 import { theme } from "@/components/theme";
+import { MIN_HALF_WIDTH, NoteRenderer, wantsNotes } from "./notes";
 
 /**
  * Grain engine (docs/IMPLEMENTATION_PLAN.md 6.1). One canvas, a fixed set of grains (one per CHF 100) and a camera.
@@ -185,6 +186,8 @@ export class Engine {
   view = { x: 0, y: 0, s: 1 };
   layer: SceneLayer | null = null;
   reduced = false;
+  /** Banknote look (notes.ts); null = round dots (`?units=dots`). */
+  notes: NoteRenderer | null = new NoteRenderer();
   /** Soft radial vignette around a world point (focus "spotlight"). */
   spot = { x: 0, y: 0, r: 0, a: 0, aTo: 0 };
   /** A ring travelling out through a cluster (focus "ripple"). */
@@ -261,6 +264,7 @@ export class Engine {
     this.spotGradient = null;
     this.motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)") ?? null;
     this.reduced = !!this.motionQuery?.matches;
+    if (!wantsNotes()) this.notes = null;
     this.last = performance.now();
     const loop = (now: number) => {
       this.raf = requestAnimationFrame(loop);
@@ -461,6 +465,11 @@ export class Engine {
     ctx.globalAlpha = 1;
   }
 
+  /** Rest-angle spread for the banknotes of the scene being entered (radians): tidy columns, scattered pools. */
+  setScatter(radians: number): void {
+    if (this.notes) this.notes.scatterTo = radians;
+  }
+
   private tick(now: number): void {
     const ctx = this.ctx;
     if (!ctx || !this.width) return;
@@ -572,6 +581,10 @@ export class Engine {
     const t1 = now * 0.00057;
     const t2 = now * 0.00049;
     let fill = "";
+    const notes = this.notes;
+    const base = this.dpr;
+    let rotated = false;
+    notes?.begin(ctx, this.grains.length, now, dt, base, reduced);
     for (const g of this.grains) {
       let a = g.a * g.dim * g.fade;
       if (a < 0.01) continue;
@@ -604,14 +617,26 @@ export class Engine {
       const r = gr * s;
       const x = gx * s + ox;
       const y = gy * s + oy;
-      if (x < -r || y < -r || x > w + r || y > h + r) continue;
+      const hw = notes ? notes.halfWidth(g, r) : 0;
+      const reach = Math.max(r, hw);
+      if (x < -reach || y < -reach || x > w + reach || y > h + reach) continue;
       if (g.fill !== fill) ctx.fillStyle = fill = g.fill;
+      if (notes && hw >= MIN_HALF_WIDTH) {
+        notes.draw(ctx, g, x, y, hw, a, s);
+        rotated = true;
+        continue;
+      }
+      if (rotated) {
+        ctx.setTransform(base, 0, 0, base, 0, 0);
+        rotated = false;
+      }
       ctx.globalAlpha = a;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, TAU);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
+    if (rotated) ctx.setTransform(base, 0, 0, base, 0, 0);
     if (ringR > 0) this.drawRing(ctx, ringR, ringFade);
     if (this.spot.a > 0.01) this.drawSpot(ctx);
     this.drawSparks(ctx, now);
