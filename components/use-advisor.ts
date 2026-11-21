@@ -144,7 +144,8 @@ export function useAdvisor() {
     dispatch({ type: "reset" });
     void engine.current?.start();
   }, [world]);
-  const interrupt = useCallback(() => engine.current?.interrupt(), []);
+  /** `invite`: the Stop button (never the mic) may say a short "Yes?". */
+  const interrupt = useCallback((invite?: boolean) => engine.current?.interrupt(invite === true), []);
   /** Any typed, spoken or chip text; the engine classifies it (continue / wait / end / question). */
   const say = useCallback((text: string) => void engine.current?.input(text), []);
   const resume = useCallback(() => void engine.current?.resume(), []);

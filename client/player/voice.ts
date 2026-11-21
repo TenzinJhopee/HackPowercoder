@@ -10,8 +10,8 @@ export type WordListener = (index: number, word: string) => void;
 export interface Speaker {
   /** Speaks one line. Resolves true when it finished, false when `stop()` cut it off. Never rejects. */
   speak(text: string, onWord?: WordListener): Promise<boolean>;
-  /** Stops immediately (pauses audio, cancels speech synthesis, stops the clock). */
-  stop(): void;
+  /** Stops now (pauses audio, cancels speech synthesis, stops the clock). `soft` fades audio out over ~200 ms. */
+  stop(soft?: boolean): void;
 }
 
 export type VoiceStatus = {
@@ -210,7 +210,7 @@ export class Voice implements Speaker {
     );
   }
 
-  stop(): void {
+  stop(soft = false): void {
     this.line++;
     this.liveAbort?.abort();
     this.liveAbort = null;
@@ -219,10 +219,14 @@ export class Voice implements Speaker {
       const audio = this.audio;
       audio.onended = null;
       audio.onerror = null;
-      audio.pause();
-      if (audio !== this.shared) audio.src = "";
       this.audio = null;
+      if (soft && !audio.paused && !audio.muted) this.fadeOut(audio);
+      else {
+        audio.pause();
+        if (audio !== this.shared) audio.src = "";
+      }
     }
+    // Speech synthesis has no volume control once speaking: it can only be cancelled.
     if (this.state.browser) window.speechSynthesis.cancel();
     const settle = this.settle;
     this.settle = null;
@@ -364,9 +368,33 @@ export class Voice implements Speaker {
     }
   }
 
+  /** Ends a running fade now: paused, volume restored. */
+  private endFade: (() => void) | null = null;
+
+  /** Ramps the volume to zero over ~200 ms, then pauses. A new line ends the fade at once. */
+  private fadeOut(audio: HTMLAudioElement): void {
+    this.endFade?.();
+    const start = audio.volume;
+    const began = Date.now();
+    const finish = () => {
+      clearInterval(timer);
+      if (this.endFade === finish) this.endFade = null;
+      audio.pause();
+      audio.volume = start;
+      if (audio !== this.shared) audio.src = "";
+    };
+    const timer = setInterval(() => {
+      const k = (Date.now() - began) / 200;
+      if (k >= 1) finish();
+      else audio.volume = Math.max(0, start * (1 - k));
+    }, 20);
+    this.endFade = finish;
+  }
+
   /** Resolves true/false like speak(); null when the audio could not start (caller falls back). */
   private playAudio(line: number, src: string, starts: number[], end: number, fireUpTo: (i: number) => void, finishAll: () => void): Promise<boolean | null> {
     if (typeof Audio === "undefined") return Promise.resolve(null);
+    this.endFade?.();
     const audio = this.shared ?? new Audio();
     // Sound may have been switched off while the clip was being fetched.
     audio.muted = this.state.muted;

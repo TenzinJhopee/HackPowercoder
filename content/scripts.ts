@@ -25,19 +25,19 @@ export const MAIN: Script = [
     say: "This is your 2025, Jeanine: 97,032 francs came in, and each grain is a hundred francs.",
     scene: { type: "galaxy" },
     figure: { label: "Income in 2025", value: 97032 },
-    bridge: "Back to the start of your year."
+    bridge: "We had just started with your year as a whole."
   },
   {
     say: "Here is every month of spending, twelve columns that together add up to 88,379 francs.",
     scene: { type: "monthly" },
     cues: [{ word: "88,379", figure: { label: "Spent in 2025", value: 88379 } }],
-    bridge: "Back to the twelve months of spending."
+    bridge: "We were looking at your twelve months of spending."
   },
   {
     say: "I see no groceries or cash withdrawals here; do you shop from another account or card?",
     scene: { type: "monthly" },
     cues: [{ word: "groceries" }, { word: "account" }],
-    bridge: "Back to whether these accounts are everything.",
+    bridge: "I had asked whether these accounts are everything.",
     question: {
       subject: "accounts_complete",
       answers: [
@@ -53,7 +53,7 @@ export const MAIN: Script = [
       { word: "June", target: 6, figure: { label: "June", value: 10365 } },
       { word: "July", target: 7, figure: { label: "July", value: 12363 } }
     ],
-    bridge: "Picking up where we left off: the summer months."
+    bridge: "We were talking about your summer months."
   },
   {
     say: "Four things took most: housing 22,462 francs, electronics 13,160, travel 12,938 and health 12,335.",
@@ -62,7 +62,7 @@ export const MAIN: Script = [
       { word: "housing", target: "Housing", figure: { label: "Housing", value: 22462 } },
       { word: "electronics", target: "Electronics", figure: { label: "Electronics", value: 13160 } }
     ],
-    bridge: "Back to where the money went."
+    bridge: "We were looking at where the money went."
   },
   {
     say: "By October you sat 2,720 francs below the start; December's thirteenth salary lifts you to 8,816, otherwise 1,352.",
@@ -71,13 +71,13 @@ export const MAIN: Script = [
       { word: "October", target: 10, figure: { label: "October, compared with the start of the year", value: -2720 } },
       { word: "thirteenth", target: "13", figure: { label: "Year end, compared with the start", value: 8816 } }
     ],
-    bridge: "Picking up with the balance of your account."
+    bridge: "We were following the balance of your account."
   },
   {
     say: "In February I don't see your 982 francs health insurance payment; was it paid elsewhere?",
     scene: { type: "monthly", focus: 2 },
     cues: [{ word: "insurance", target: 2, action: "ghost", figure: { label: "Health insurance, usually", value: 982 } }],
-    bridge: "Back to the February payment.",
+    bridge: "We were at the February payment I could not find.",
     question: {
       subject: "missing_payment:Krankenkasse:2025-02",
       answers: [
@@ -90,7 +90,7 @@ export const MAIN: Script = [
     say: "I see three tax payments, 630 francs in all; is tax taken from your salary or paid elsewhere?",
     scene: { type: "pools" },
     cues: [{ word: "tax", target: "Tax", figure: { label: "Tax paid in 2025", value: 630 } }],
-    bridge: "Back to the tax payments.",
+    bridge: "I had asked about your tax payments.",
     question: {
       subject: "tax_provision",
       answers: [
@@ -106,7 +106,7 @@ export const MAIN: Script = [
       { word: "pillar", target: "3a" },
       { word: "savings", target: "Savings" }
     ],
-    bridge: "Back to what never started this year.",
+    bridge: "We were looking at what did not start this year.",
     question: {
       subject: "no_pillar_3a",
       answers: [
@@ -123,7 +123,7 @@ export const MAIN: Script = [
       { word: "2,400", figure: { label: "In pillar 3a after one year", value: 2400 } }
     ],
     offer: true,
-    bridge: "Back to the one option I wanted to show you."
+    bridge: "I was about to show you one option."
   }
 ];
 
@@ -138,6 +138,8 @@ export type SideAnswer = {
   examples?: () => Script[];
   /** What stays on screen after the answer (the savings slip), built from the same question. */
   keep?: (question: string) => Keepsake | null;
+  /** Short spoken reactions before the answer (rotated); no numbers. */
+  lead?: readonly string[];
 };
 
 const asks = (pattern: RegExp) => (question: string) => pattern.test(question.toLocaleLowerCase("en"));
@@ -208,6 +210,7 @@ export function affordScript(amount: number, month: number | null = null): Scrip
 
 const affordAnswer: SideAnswer = {
   id: "afford",
+  lead: ["Let's test that against your year."],
   examples: () => affordExampleScripts(),
   match: (question) =>
     /\b(afford|can i (buy|spend))\b/i.test(question) || /^\s*(about\s+)?[\d.,'’]+\s*(k|thousand)?\s*(francs?|chf)?\s*[.?!]?\s*$/i.test(question),
@@ -289,6 +292,7 @@ export function saveScript(target: number): Script {
 
 const saveTargetAnswer: SideAnswer = {
   id: "save-target",
+  lead: ["Let's see where that could come from."],
   match: (question) => SAVE_QUESTION.test(question) && saveTarget(question) !== null,
   script: (question) => saveScript(saveTarget(question)!),
   examples: () => [saveScript(saveTarget(SAVE_EXAMPLE)!)],
@@ -300,6 +304,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
   saveTargetAnswer,
   {
     id: "june",
+    lead: ["Sure, let's look at June.", "June, yes, good question."],
     match: asks(/\bjun(e)?\b/),
     script: [
       {
@@ -324,6 +329,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
   },
   {
     id: "july",
+    lead: ["Sure, let's look at July.", "July, yes, let me show you."],
     match: asks(/\bjul(y)?\b/),
     script: [
       {
@@ -353,6 +359,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
   },
   {
     id: "september",
+    lead: ["Ah, September, the tall one.", "Good eye, let's look at September."],
     match: asks(/\bsep(t|tember)?\b/),
     script: [
       {
@@ -381,6 +388,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
   },
   {
     id: "november",
+    lead: ["Sure, let's look at November.", "November, yes, let me show you."],
     match: asks(/\bnov(ember)?\b/),
     script: [
       {
@@ -406,6 +414,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
   {
     // Savings advice: fixed / adjustable / flexible, the realistic levers, then the one option (touch-confirmed).
     id: "save",
+    lead: ["Happy to, let's look for room together."],
     match: asks(
       /\bhow\s+(can|could|do|should|would)\s+i\s+(save|spend\s+less|cut|put\s+aside|set\s+aside)|\b(save|saving)\s+(more\s+|some\s+)?money\b|\bwhere\s+(can|could|should)\s+i\s+(cut|save|spend\s+less|reduce)|\bwhat\s+(can|could|should)\s+i\s+do\s+(better|differently)|\b(cut|reduce|lower)\s+(down\s+)?(my\s+)?(spending|costs|expenses)\b|\bspend\s+less\b/
     ),
@@ -442,6 +451,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
   {
     // Habits: what the list hides, what changed, the big one-offs and an honest small item. No offer.
     id: "habits",
+    lead: ["Let's look at how you tend to spend."],
     match: asks(
       /\bhabits?\b|\bpatterns?\b|\bwhat\s+do\s+you\s+think\s+(of|about)\s+my\s+(spending|money|finances)\b/
     ),
@@ -482,8 +492,22 @@ export const NOT_UNDERSTOOD_LINE = "I did not catch that. Could you ask again?";
 /** Spoken when the main presentation ends. */
 export const FINISHED_LINE = "That was your year. Ask me about any month, or start over whenever you like.";
 
+/** Said when a side answer ends, handing the choice back (rotated). Skipped after a question or the offer. */
+export const CLOSING_LINES = [
+  "Does that answer it, or shall I stay here a little longer?",
+  "Shall I go on with your year?",
+  "Is that clearer now, or shall we dig a little deeper?"
+] as const;
+/** Said first when the user chooses to continue, before the interrupted beat's bridge (rotated). */
+export const REENTRY_LINES = ["Alright, back to your year.", "Good, where were we?", "Okay, let's pick up again."] as const;
+/** Said after the Stop button (never the mic), inviting the question (rotated). */
+export const INVITE_LINES = ["Yes?", "Go ahead."] as const;
+
 export const FIXED_LINES: string[] = [
   ...FILLER_LINES,
+  ...CLOSING_LINES,
+  ...REENTRY_LINES,
+  ...INVITE_LINES,
   DEFAULT_BRIDGE,
   DIRECTOR_FAILURE_LINE,
   OFFER_CONFIRMED_LINE,
@@ -497,7 +521,7 @@ export const FIXED_LINES: string[] = [
 export function allLines(): string[] {
   const lines = [
     ...MAIN.flatMap((beat) => [beat.say, beat.bridge ?? ""]),
-    ...SIDE_ANSWERS.flatMap((answer) => sideScripts(answer).flat().map((beat) => beat.say)),
+    ...SIDE_ANSWERS.flatMap((answer) => [...(answer.lead ?? []), ...sideScripts(answer).flat().map((beat) => beat.say)]),
     ...FIXED_LINES
   ].filter(Boolean);
   return [...new Set(lines)];

@@ -9,6 +9,8 @@ import type { Script } from "../lib/contracts";
 import { allowedNumbers, buildFacts } from "../lib/facts";
 import { loadAccountCsv } from "../lib/load-accounts";
 import { buildDataBlock, DIRECTOR_INSTRUCTIONS } from "../lib/director/prompt";
+import { runDirectorTool, type DirectorToolContext } from "../lib/director/tools";
+import type { Transaction } from "../lib/models";
 
 const monthlySpending = [5994, 7063, 6028, 6626, 6435, 10365, 12363, 4565, 14363, 3845, 7390, 3342];
 // Series values the facts/series would provide; 14363 is September's spending.
@@ -82,6 +84,44 @@ test("breakdown: 3 % rule, Other remainder, invented values", () => {
 
   const invented = withParts([{ name: "Plane tickets", value: 7777 }]);
   assert.equal(invented.ok, false);
+});
+
+test("a day after a month name is not a spoken number", () => {
+  assert.deepEqual(extractNumbers("On September 18 you had 14,363 francs, by 18 September or the 18th."), [14363]);
+  assert.deepEqual(extractNumbers("September 14,363 francs"), [14363]);
+});
+
+const booking = (id: string, date: string, merchant: string, amount: number, type: Transaction["type"] = "expense"): Transaction => ({
+  id, date, description: merchant, amount, originalAmount: amount, currency: "CHF", category: "Shopping", type,
+  account: "KK-Konto", merchant, isRecurring: false, confidence: 1
+});
+
+test("runDirectorTool: find_transactions nets refunds, rejects bad input, collects numbers", () => {
+  const transactions = [
+    booking("1", "2025-05-02", "Zalando", -200),
+    booking("2", "2025-05-10", "Zalando", 50, "refund"),
+    booking("3", "2025-06-01", "Zalando", -120),
+    booking("4", "2025-05-03", "Migros", -80),
+    booking("5", "2025-05-04", "Card payment", -999, "transfer")
+  ];
+  const tc: DirectorToolContext = { series: buildSeries(transactions, "CHF", 2025), transactions, currency: "CHF", asOf: "2025-06-01" };
+
+  const found = runDirectorTool("find_transactions", { merchant: "zAlAnDo", to: "2025-05-31" }, tc);
+  assert.equal(found.isError, false);
+  const result = JSON.parse(found.text);
+  assert.equal(result.count, 2);
+  assert.equal(result.net_total, 150);
+  assert.deepEqual(result.largest, [{ date: "2025-05-02", merchant: "Zalando", amount: 200 }]);
+  assert.ok([2, 150, 200].every((n) => found.numbers.includes(n)));
+
+  // Transfers never count; a date range alone works.
+  assert.equal(JSON.parse(runDirectorTool("find_transactions", '{"from":"2025-05-01","to":"2025-05-31"}', tc).text).net_total, 230);
+
+  assert.equal(runDirectorTool("find_transactions", {}, tc).isError, true);
+  assert.equal(runDirectorTool("find_transactions", { from: "May 1" }, tc).isError, true);
+  assert.equal(runDirectorTool("total", { series: "monthly_spending", months: [13] }, tc).isError, true);
+  assert.equal(runDirectorTool("nope", {}, tc).isError, true);
+  assert.deepEqual(runDirectorTool("total", { series: "monthly_spending", months: [5, 6] }, tc).numbers, [350]);
 });
 
 test("no beat left means failure", () => {

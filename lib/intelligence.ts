@@ -18,11 +18,21 @@ export interface RecurringFlow {
   type: "income" | "expense";
   currency: string;
   occurrenceCount: number;
+  /** Mean of the booked amounts (kept for compatibility; one outlier moves it, so prefer `typicalAmount`). */
   averageAmount: number;
+  /** Median booked amount: the amount one regular payment usually has. */
+  typicalAmount: number;
+  /** `typicalAmount` scaled to one month. */
   monthlyAmount: number;
+  /** Sum of all booked amounts of this flow in the data. */
+  totalAmount: number;
   cadence: "weekly" | "monthly" | "quarterly";
   confidence: number;
   transactionIds: string[];
+  /** Date of the last booking. */
+  lastDate: string;
+  /** The last booking is at most two typical gaps before the latest date in the transactions passed in. */
+  active: boolean;
 }
 
 export interface AccountAnalysis {
@@ -275,13 +285,31 @@ function recurringName(transaction: Transaction) {
   return normalizedText(transaction.merchant || transaction.description);
 }
 
+/**
+ * Recurring-flow rules (generic, no merchant lists):
+ * - at least 3 bookings of the same merchant, category and currency;
+ * - the median gap sets the cadence (weekly 6-10, monthly 20-40, quarterly 75-105 days);
+ * - regular gaps: at least 75% of gaps lie within 25% (min. 2 days) of the median gap, so one skipped month passes;
+ * - stable amounts: at least 75% of amounts lie within 20% of the median amount;
+ * - the median amount is the typical amount, so one outlier (a 13th salary, a one-off purchase) cannot inflate it;
+ * - active: the last booking is at most two median gaps before the latest date in `transactions`.
+ */
+const REGULAR_SHARE = 0.75;
+const GAP_TOLERANCE = 0.25;
+const AMOUNT_TOLERANCE = 0.2;
+const ACTIVE_GAPS = 2;
+
 function flowGroups(transactions: Transaction[], type: "income" | "expense", currency: string): RecurringFlow[] {
   const groups = new Map<string, Transaction[]>();
+  let latestDate = "";
   for (const transaction of transactions) {
-    if (transaction.type !== type || transaction.currency !== currency) continue;
+    if (transaction.currency !== currency) continue;
+    if (transaction.date > latestDate) latestDate = transaction.date;
+    if (transaction.type !== type) continue;
     const key = `${recurringName(transaction)}|${transaction.category}|${currency}`;
     groups.set(key, [...(groups.get(key) ?? []), transaction]);
   }
+  const share = (values: number[], fits: (value: number) => boolean) => values.filter(fits).length / values.length;
 
   return [...groups.entries()].flatMap(([key, entries]) => {
     const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
@@ -294,10 +322,15 @@ function flowGroups(transactions: Transaction[], type: "income" | "expense", cur
           : typicalGap >= 75 && typicalGap <= 105 ? "quarterly"
             : undefined;
     if (!cadence) return [];
-    const averageAmount = average(sorted.map((item) => Math.abs(item.amount)));
+    const gapTolerance = Math.max(2, typicalGap * GAP_TOLERANCE);
+    const gapShare = share(gaps, (gap) => Math.abs(gap - typicalGap) <= gapTolerance);
+    if (gapShare < REGULAR_SHARE) return [];
+    const amounts = sorted.map((item) => Math.abs(item.amount));
+    const typicalAmount = median(amounts);
+    if (share(amounts, (amount) => Math.abs(amount - typicalAmount) <= typicalAmount * AMOUNT_TOLERANCE) < REGULAR_SHARE) return [];
     const monthlyFactor = cadence === "weekly" ? 4.345 : cadence === "quarterly" ? 1 / 3 : 1;
-    const consistentGapCount = gaps.filter((gap) => Math.abs(gap - typicalGap) <= typicalGap * 0.35).length;
-    const confidence = Math.min(0.98, 0.55 + sorted.length * 0.06 + consistentGapCount / gaps.length * 0.15);
+    const lastDate = sorted[sorted.length - 1].date;
+    const confidence = Math.min(0.98, 0.55 + sorted.length * 0.06 + gapShare * 0.15);
     return [{
       key,
       name: sorted[0].merchant || sorted[0].description,
@@ -305,11 +338,15 @@ function flowGroups(transactions: Transaction[], type: "income" | "expense", cur
       type,
       currency,
       occurrenceCount: sorted.length,
-      averageAmount,
-      monthlyAmount: averageAmount * monthlyFactor,
+      averageAmount: average(amounts),
+      typicalAmount,
+      monthlyAmount: typicalAmount * monthlyFactor,
+      totalAmount: amounts.reduce((sum, amount) => sum + amount, 0),
       cadence,
       confidence,
-      transactionIds: sorted.map((item) => item.id)
+      transactionIds: sorted.map((item) => item.id),
+      lastDate,
+      active: dayDifference(lastDate, latestDate) <= typicalGap * ACTIVE_GAPS
     }];
   }).sort((a, b) => b.monthlyAmount - a.monthlyAmount);
 }
@@ -532,14 +569,18 @@ export function forecastCashFlow(
 ): CashFlowForecast {
   const asOfDate = asOf.toISOString().slice(0, 10);
   const selected = transactions.filter((item) => item.currency === currency && item.date <= asOfDate);
-  const recurringIncomeFlows = flowGroups(selected, "income", currency);
-  const recurringExpenseFlows = flowGroups(selected, "expense", currency);
+  // Only flows that are still running count as recurring; stopped ones fall into variable spending.
+  const recurringIncomeFlows = flowGroups(selected, "income", currency).filter((flow) => flow.active);
+  const recurringExpenseFlows = flowGroups(selected, "expense", currency).filter((flow) => flow.active);
   const recurringExpenseIds = new Set(recurringExpenseFlows.flatMap((flow) => flow.transactionIds));
   const recentMonths = [...new Set(selected.filter((item) => item.type === "expense").map((item) => monthKey(item.date)))].sort().slice(-3);
   const variableTransactions = selected.filter((item) => item.type === "expense" && !recurringExpenseIds.has(item.id));
-  const variableTotals = recentMonths.map((key) =>
-    sumAbsolute(variableTransactions.filter((item) => monthKey(item.date) === key))
-  );
+  const refunds = selected.filter((item) => item.type === "refund");
+  // Variable spending is net of the month's refunds.
+  const variableTotals = recentMonths.map((key) => Math.max(0,
+    sumAbsolute(variableTransactions.filter((item) => monthKey(item.date) === key)) -
+    sumAbsolute(refunds.filter((item) => monthKey(item.date) === key))
+  ));
   const averageVariableExpensesMonthly = average(variableTotals);
   const recurringIncomeMonthly = recurringIncomeFlows.reduce((sum, flow) => sum + flow.monthlyAmount, 0);
   const recurringExpensesMonthly = recurringExpenseFlows.reduce((sum, flow) => sum + flow.monthlyAmount, 0);
@@ -564,8 +605,8 @@ export function forecastCashFlow(
   };
   const horizons: [ForecastHorizon, ForecastHorizon] = [makeHorizon(30), makeHorizon(90)];
   const assumptions = [
-    `Recurring inflows/outflows use the average amount of at least three observed transactions at a weekly, monthly, or quarterly cadence.`,
-    `Variable spending uses the average of ${recentMonths.length} latest calendar month(s) with expense history, excluding identified recurring transactions.`,
+    `Recurring inflows/outflows use the median amount of at least three regular, stable, still-active transactions at a weekly, monthly, or quarterly cadence.`,
+    `Variable spending uses the average of ${recentMonths.length} latest calendar month(s) with expense history, net of refunds, excluding identified recurring transactions.`,
     `Known bills are added only when their due dates fall inside the projection window and their names do not match an identified recurring payment.`,
     `Projection is net transaction flow in ${currency}; no starting balance, currency conversion, market prices, or future guarantees are assumed.`
   ];

@@ -121,15 +121,13 @@ export type DirectorResponse = { script: Script; source: "model" | "prepared" | 
 
 /** Spoken when the director fails; then the conversation goes to `waiting`. */
 export const DIRECTOR_FAILURE_LINE = "I could not put an answer together right now.";
-/** Spoken while the director works on an unprepared question. */
 /** Spoken while the director is working; rotated so the same one is never heard twice in a row. */
 export const FILLER_LINES = [
-  "Let me check.",
-  "One moment, I am looking at that.",
   "Good question, give me a second.",
+  "Hmm, let me look into that for you.",
   "Let me look at your numbers.",
-  "I will pull that up.",
-  "Just a moment."
+  "Right, let me pull that up.",
+  "Let me see what your year says about that."
 ] as const;
 export const FILLER_LINE = FILLER_LINES[0];
 /** Spoken on resume when the interrupted beat has no bridge. */

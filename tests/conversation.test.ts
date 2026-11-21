@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULT_BRIDGE, FILLER_LINE, type DirectorResponse, type Script } from "../lib/contracts";
-import { classify, monthIn } from "../client/conversation/intent";
+import { classify, matchAnswer, monthIn } from "../client/conversation/intent";
+import { CLOSING_LINES, REENTRY_LINES } from "../content/scripts";
 import { Conversation } from "../client/conversation/state";
 import { splitWords, type Speaker, type WordListener } from "../client/player/voice";
 import { StubWorld } from "../client/world/stub-world";
@@ -148,6 +149,57 @@ test("intent rules", () => {
   assert.equal(monthIn("what happened in May"), 5);
 });
 
+test("intent rules: how people cut in and answer", () => {
+  assert.equal(classify("one second, why was June so high"), "question");
+  assert.equal(classify("sorry, quick question about September"), "question");
+  assert.equal(classify("thanks, that's clear, go on"), "continue");
+  assert.equal(classify("okay got it, carry on"), "continue");
+  assert.equal(classify("no that's fine, continue"), "continue");
+  assert.equal(classify("yes please continue"), "continue");
+  assert.equal(classify("thanks, go on"), "continue");
+  assert.equal(classify("thanks, that's clear"), "continue");
+  assert.equal(classify("that's all, thank you"), "end");
+  assert.equal(classify("hmm, wait"), "wait");
+  assert.equal(classify("one second"), "wait");
+  assert.equal(classify("sorry, quick question"), "wait");
+  assert.equal(classify("um, okay"), "continue");
+  assert.equal(classify("hey, why is rent so high"), "question");
+  const answers = [
+    { id: "y", label: "Yes, from another account", kind: "yes" as const },
+    { id: "n", label: "No, it was missed", kind: "no" as const },
+  ];
+  assert.equal(matchAnswer("um, yes", answers)?.id, "y");
+  assert.equal(matchAnswer("sorry, no", answers)?.id, "n");
+  assert.equal(matchAnswer("no wait", answers), null);
+});
+
+test("side answer: lead-in, answer, spoken hand-back; return skips a beat heard to its end", async () => {
+  const log: string[] = [];
+  const voice = new FakeVoice(log, () => false);
+  const prepared = [{ match: (q: string) => /june/i.test(q), lead: ["Sure, let's look at June."], script: [{ say: "June had the bike." }] }];
+  const talk = new Conversation({ world: new StubWorld({ log }), voice, main: MAIN, prepared, backup: true });
+  let stopAt: string | null = MAIN[2].say;
+  talk.on((e) => {
+    if (e.type === "word" && stopAt && log.at(-1) === `say:${stopAt}` && e.index === splitWords(stopAt).length - 1) {
+      stopAt = null;
+      talk.interrupt();
+    }
+  });
+  void talk.start();
+  await until(() => talk.mode === "listening");
+  await talk.ask("one second, why was June so high?");
+  assert.equal(talk.mode, "waiting");
+  const says = log.filter((l) => l.startsWith("say:")).map((l) => l.slice(4));
+  const i = says.indexOf("Sure, let's look at June.");
+  assert.ok(i > 0 && says[i + 1] === "June had the bike." && (CLOSING_LINES as readonly string[]).includes(says[i + 2]), says.join(" | "));
+  const mark = log.length;
+  await talk.resume();
+  const after = log.slice(mark).filter((l) => l.startsWith("say:")).map((l) => l.slice(4));
+  assert.ok((REENTRY_LINES as readonly string[]).includes(after[0]), after.join(" | "));
+  assert.equal(after[1], "Back to June.");
+  assert.equal(after[2], MAIN[3].say, "beat heard to its end is not repeated");
+});
+
 test("the savings answer emits its plan; the slip reveals a line per beat and stays after the answer", async () => {
   const { SIDE_ANSWERS, SAVE_EXAMPLE } = await import("../content/scripts");
   const { keepReducer } = await import("../components/keepsake");
@@ -171,7 +223,7 @@ test("the savings answer emits its plan; the slip reveals a line per beat and st
   const revealed: number[] = [];
   for (const e of events) {
     slip = keepReducer(slip, e);
-    if (e.type === "line") revealed.push(slip!.revealed);
+    if (e.type === "line" && e.kind === "side") revealed.push(slip!.revealed);
   }
   assert.deepEqual(revealed, [...plan.cuts.map((_, i) => i + 1), plan.cuts.length + 1]);
   assert.equal(slip?.live, false);

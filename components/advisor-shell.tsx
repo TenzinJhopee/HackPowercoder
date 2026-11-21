@@ -72,7 +72,7 @@ export function AdvisorShell() {
               text={input.text}
               onText={input.setText}
               onSubmit={advisor.say}
-              onStop={advisor.interrupt}
+              onStop={() => advisor.interrupt(true)}
               onMicDown={() => {
                 advisor.interrupt();
                 mic.start();

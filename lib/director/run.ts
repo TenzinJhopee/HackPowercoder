@@ -29,14 +29,25 @@ export interface DirectorInput {
   generate?: typeof generateScript;
 }
 
-/** Facts -> prompt -> Claude (with the `total` tool) -> validated script, or the fallback line. Never throws. */
+/** Facts -> prompt -> model (with the tools in ./tools) -> validated script, or the fallback line. Never throws. */
 export async function runDirector(input: DirectorInput): Promise<DirectorResponse> {
   try {
     const facts = buildFacts(input.transactions, "CHF", input.tags, input.notes);
-    const series = buildSeries(input.transactions, "CHF", Number(facts.periodStart.slice(0, 4)));
+    const currency = "CHF";
+    const series = buildSeries(input.transactions, currency, Number(facts.periodStart.slice(0, 4)));
+    // The data is historical: tools work "as of" its last booking, never today.
+    const asOf = input.transactions.reduce((last, t) => (t.currency === currency && t.date > last ? t.date : last), "");
     const generate = input.generate ?? generateScript;
     const output: GenerateOutput = await generate(
-      { instructions: DIRECTOR_INSTRUCTIONS, dataBlock: buildDataBlock(facts, series), userMessage: buildUserMessage(input.request), series },
+      {
+        instructions: DIRECTOR_INSTRUCTIONS,
+        dataBlock: buildDataBlock(facts, series),
+        userMessage: buildUserMessage(input.request),
+        series,
+        transactions: input.transactions,
+        currency,
+        asOf
+      },
       input.apiKey
     );
 

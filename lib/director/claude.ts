@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { totalOf, seriesNames, type Series } from "./series";
+import { directorTools, runDirectorTool, type DirectorToolContext } from "./tools";
 
 /** Server-side only: reads ANTHROPIC_API_KEY. Never import from client code. */
 
@@ -14,32 +14,21 @@ export class DirectorError extends Error {
   }
 }
 
-/** Plan 9.1: the one tool. Executed in code, so the model never adds up numbers itself. */
-const totalTool: Anthropic.Tool = {
-  name: "total",
-  description: "Adds up the chosen months of a series. Use it whenever you need a total.",
-  input_schema: {
-    type: "object",
-    properties: {
-      series: { type: "string", enum: [...seriesNames] },
-      months: { type: "array", items: { type: "integer", minimum: 1, maximum: 12 } }
-    },
-    required: ["series", "months"]
-  }
-};
+/** Plan 9.1: tools are executed in code (lib/director/tools.ts), so the model never computes numbers itself. */
+const claudeTools: Anthropic.Tool[] = directorTools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.input_schema }));
 
-export interface GenerateInput {
+/** The tool context (series, transactions, currency, asOf) plus the prompt. */
+export interface GenerateInput extends DirectorToolContext {
   instructions: string;
   /** Facts + series; marked for prompt caching. */
   dataBlock: string;
   userMessage: string;
-  series: Series;
 }
 
 export interface GenerateOutput {
   /** The parsed final JSON (`{"script":[...]}`), not yet validated. */
   json: unknown;
-  /** Every `total` result produced while answering (these numbers may be spoken). */
+  /** Every number the tools returned while answering (these numbers may be spoken). */
   toolResults: number[];
 }
 
@@ -61,15 +50,7 @@ export function parseJsonObject(text: string): unknown {
   }
 }
 
-function runTotal(input: unknown, series: Series): { text: string; value?: number } {
-  const args = (typeof input === "object" && input !== null ? input : {}) as { series?: unknown; months?: unknown };
-  const name = seriesNames.find((candidate) => candidate === args.series);
-  const total = name && Array.isArray(args.months) ? totalOf(series, name, args.months as number[]) : null;
-  if (total === null || !name) return { text: 'Invalid input: "series" must be monthly_spending or card_bill and "months" a list of integers 1-12.' };
-  return { text: String(total), value: total };
-}
-
-/** Calls Claude with the facts block cached, executes `total` calls, and returns the final JSON. */
+/** Calls Claude with the facts block cached, executes tool calls, and returns the final JSON. */
 export async function generateScript(input: GenerateInput, apiKey: string, model = process.env.CLAUDE_MODEL || DEFAULT_MODEL): Promise<GenerateOutput> {
   const anthropic = getClient(apiKey);
   const deadline = Date.now() + DIRECTOR_TIMEOUT_MS;
@@ -90,7 +71,7 @@ export async function generateScript(input: GenerateInput, apiKey: string, model
           { type: "text", text: input.instructions },
           { type: "text", text: input.dataBlock, cache_control: { type: "ephemeral" } }
         ],
-        tools: [totalTool],
+        tools: claudeTools,
         messages,
         ...(effort === "off" ? {} : { output_config: { effort } })
       },
@@ -106,9 +87,9 @@ export async function generateScript(input: GenerateInput, apiKey: string, model
       const results: Anthropic.ToolResultBlockParam[] = [];
       for (const block of response.content) {
         if (block.type !== "tool_use") continue;
-        const result = block.name === "total" ? runTotal(block.input, input.series) : { text: `Unknown tool ${block.name}.` };
-        if (result.value !== undefined) toolResults.push(result.value);
-        results.push({ type: "tool_result", tool_use_id: block.id, content: result.text, ...(result.value === undefined ? { is_error: true } : {}) });
+        const result = runDirectorTool(block.name, block.input, input);
+        toolResults.push(...result.numbers);
+        results.push({ type: "tool_result", tool_use_id: block.id, content: result.text, ...(result.isError ? { is_error: true } : {}) });
       }
       messages.push({ role: "user", content: results });
       continue;
