@@ -68,10 +68,13 @@ export async function runDirector(input: DirectorInput): Promise<DirectorRespons
       allowed,
       monthTotals: series.monthlySpending,
       toolResults: output.toolResults,
-      savingsAllowed: [...questionNumbers, facts.offer.monthly, facts.offer.after_one_year],
+      // Her own number, the offer, and what cancelling a subscription saves (computed in facts).
+      savingsAllowed: [...questionNumbers, facts.offer.monthly, facts.offer.after_one_year, ...facts.savings.cancel.flatMap((c) => [c.savesMonthly, c.savesYearly])],
       allowOffer: !facts.insights.some((i) => i.id === "no_pillar_3a" && i.mode === "resolved" && i.userAnswer === "has_elsewhere")
     });
     if (!result.ok) return fallbackResponse(result.error);
+    // Dropped beats shorten the answer silently on screen; make them visible in the server log.
+    if (result.dropped.length) console.warn(`[director] dropped ${result.dropped.length} beat(s) for "${input.request.question}": ${result.dropped.join(" | ")}`);
     const script = stageScript(result.script, {
       currentScene: input.request.screen.scene,
       currentFocus: input.request.screen.focus,

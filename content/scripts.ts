@@ -43,8 +43,8 @@ export const MAIN: Script = [
       label: "Other accounts or cards",
       assume: "I treat what's left each month as an upper bound, since some spending may be paid another way.",
       answers: [
-        { id: "has_other", label: "Yes, I have another account", kind: "yes" },
-        { id: "complete", label: "No, this is everything", kind: "no" }
+        { id: "has_other", label: "Yes, I have another account", kind: "yes", recall: "I see no groceries or cash withdrawals here, and you told me you use another account." },
+        { id: "complete", label: "No, this is everything", kind: "no", recall: "I see no groceries or cash withdrawals here, and you told me this account covers everything." }
       ]
     }
   },
@@ -85,8 +85,8 @@ export const MAIN: Script = [
       label: "February health insurance",
       assume: "I don't count it as missed; February simply shows no payment here.",
       answers: [
-        { id: "paid_elsewhere", label: "Yes, from another account", kind: "yes" },
-        { id: "missed", label: "No, it was missed", kind: "no" }
+        { id: "paid_elsewhere", label: "Yes, from another account", kind: "yes", recall: "February's 982 francs health insurance is not in these accounts; you told me another account paid it." },
+        { id: "missed", label: "No, it was missed", kind: "no", recall: "February's 982 francs health insurance is not in these accounts; you told me it was missed." }
       ]
     }
   },
@@ -100,8 +100,8 @@ export const MAIN: Script = [
       label: "How tax is paid",
       assume: "I only count the tax payments I can see and never estimate what you owe.",
       answers: [
-        { id: "handled_elsewhere", label: "Yes, it is handled elsewhere", kind: "yes" },
-        { id: "not_yet", label: "No, not yet", kind: "no" }
+        { id: "handled_elsewhere", label: "Yes, it is handled elsewhere", kind: "yes", recall: "I see three tax payments, 630 francs in all; you told me your tax is handled elsewhere." },
+        { id: "not_yet", label: "No, not yet", kind: "no", recall: "I see three tax payments, 630 francs in all; you told me it is not settled yet." }
       ]
     }
   },
@@ -118,8 +118,8 @@ export const MAIN: Script = [
       label: "Pillar 3a and savings",
       assume: "Until you tell me, I keep the pillar 3a option in the plan.",
       answers: [
-        { id: "has_elsewhere", label: "Yes, at another bank", kind: "yes", skipOffer: true },
-        { id: "none", label: "No, I have none", kind: "no" }
+        { id: "has_elsewhere", label: "Yes, at another bank", kind: "yes", skipOffer: true, recall: "I see no pillar 3a payment or savings transfer; you told me they are at another bank." },
+        { id: "none", label: "No, I have none", kind: "no", recall: "I see no pillar 3a payment or savings transfer; you told me you have none yet." }
       ]
     }
   },
@@ -265,18 +265,36 @@ function saveTarget(question: string): number | null {
 }
 
 const purchaseName = (merchant: string): [string, string] => PURCHASE_NAMES[merchant] ?? [`${merchant} purchase`, `${merchant} purchases`];
-const planFor = (target: number) => savingsPlan(target, facts.savings.habits, facts.savings.months, facts.savings.excluded);
+/** Subscriptions she could cancel and payments worth comparing, from the recurring payments and the merchant tags (lib/facts.ts). */
+const cancellable = facts.savings.cancel ?? [];
+const switchable = facts.savings.switch ?? [];
+/** Below this a cancellation is called small, plainly. */
+const SMALL_MONTHLY = 50;
+const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+const cancelName = (merchant: string) => cancellable.find((c) => c.merchant === merchant)?.name ?? merchant;
+const planFor = (target: number) => savingsPlan(target, facts.savings.habits, facts.savings.months, facts.savings.excluded, cancellable);
 
 /** The plan the savings answer speaks, with each cut's display name (plural), for the slip that stays on screen. */
 export function saveKeepsake(target: number): Keepsake {
   const plan = planFor(target);
-  return { kind: "savings", plan, names: plan.cuts.map((cut) => purchaseName(cut.merchant)[1]) };
+  return { kind: "savings", plan, names: plan.cuts.map((cut) => (cut.kind === "cancel" ? `Cancel ${cancelName(cut.merchant)}` : purchaseName(cut.merchant)[1])) };
 }
 
-/** One beat per cut, then the total; when her habits cannot reach the target, that is said plainly. */
+/**
+ * One beat per change (a cancellation first, then habit cuts), then the total. When the target is out of reach that
+ * is said plainly, then the switch lever (no saving figure), then the big purchases.
+ */
 export function saveScript(target: number): Script {
   const plan = planFor(target);
   const script: Script = plan.cuts.map((cut) => {
+    if (cut.kind === "cancel") {
+      const name = cancelName(cut.merchant);
+      return {
+        say: `Cancelling ${name}, if you rarely use it, saves ${francs(cut.saves)} francs a month${cut.saves < SMALL_MONTHLY ? ": small, but one decision" : ""}.`,
+        scene: { type: "pools", focus: cut.group },
+        cues: [{ word: name.split(" ")[0], target: cut.group, figure: { label: `Saved a month: cancel ${name}`, value: cut.saves } }]
+      };
+    }
     const [one, many] = purchaseName(cut.merchant);
     const cueWord = (cut.fewer === 1 ? one : many).split(" ")[0];
     return {
@@ -294,10 +312,19 @@ export function saveScript(target: number): Script {
     return script;
   }
   script.push({
-    say: `Your regular habits give about ${francs(plan.reachable)} francs a month at most, not ${francs(target)}.`,
+    say: `These changes give about ${francs(plan.reachable)} francs a month at most, not ${francs(target)}.`,
     scene: { type: "pools" },
-    cues: [{ word: "habits", figure: { label: "From regular habits, a month", value: plan.reachable } }]
+    cues: [{ word: "changes", figure: { label: "From these changes, a month", value: plan.reachable } }]
   });
+  const compare = switchable[0];
+  if (compare) {
+    // We do not know market prices: what it costs, never what switching would save.
+    script.push({
+      say: `Beyond that, your ${compare.name} at ${francs(compare.costsMonthly)} francs a month is worth comparing for a cheaper option.`,
+      scene: { type: "pools", focus: compare.group },
+      cues: [{ word: compare.name.split(" ")[0], target: compare.group, figure: { label: `${capital(compare.name)} a month`, value: compare.costsMonthly } }]
+    });
+  }
   if (oneOffs?.oneOffTotal && oneOffs.purchases) {
     script.push({
       say: `The rest would come from big purchases: ${oneOffs.purchases} of them cost ${francs(oneOffs.oneOffTotal)} francs last year.`,
@@ -305,6 +332,63 @@ export function saveScript(target: number): Script {
       cues: [{ word: "purchases", figure: { label: "Big one-off purchases in 2025", value: Math.round(oneOffs.oneOffTotal) } }]
     });
   }
+  return script;
+}
+
+/**
+ * "How can I save money?": something she could do first, never statistics. The cancel and switch beats are built
+ * from facts.savings (the largest subscription, then up to two payments worth comparing, largest first; never a
+ * saving figure for a switch), then the repeated habits, then the one option, last.
+ */
+function saveAdviceScript(): Script {
+  const script: Script = [];
+  const drop = cancellable[0];
+  if (drop) {
+    script.push({
+      say: `If you rarely use ${drop.name}, cancelling it saves ${francs(drop.savesMonthly)} francs a month, ${francs(drop.savesYearly)} a year${drop.savesMonthly < SMALL_MONTHLY ? ": small, but simple" : ""}.`,
+      scene: { type: "pools", focus: drop.group },
+      cues: [
+        { word: drop.name.split(" ")[0], target: drop.group, figure: { label: `${capital(drop.name)} a month`, value: drop.savesMonthly } },
+        { word: francs(drop.savesYearly), figure: { label: `Saved a year: cancel ${drop.name}`, value: drop.savesYearly } }
+      ]
+    });
+  }
+  const [first, second] = switchable;
+  if (first) {
+    const lead = { word: first.name.split(" ")[0], target: first.group, figure: { label: `${capital(first.name)} a month`, value: first.costsMonthly } };
+    script.push(
+      second
+        ? {
+            say: `Your ${first.name} costs ${francs(first.costsMonthly)} francs a month, your ${second.name} ${francs(second.costsMonthly)}; comparing offers could lower both.`,
+            scene: { type: "pools", focus: first.group },
+            cues: [lead, { word: second.name.split(" ")[0], target: second.group, figure: { label: `${capital(second.name)} a month`, value: second.costsMonthly } }]
+          }
+        : {
+            say: `Your ${first.name} costs ${francs(first.costsMonthly)} francs a month; ${first.how} could bring that down.`,
+            scene: { type: "pools", focus: first.group },
+            cues: [lead]
+          }
+    );
+  }
+  script.push(
+    {
+      say: "You could also cut back a little: the canteen cost 1,616 francs, Orell Fuessli 1,747 this year.",
+      scene: { type: "pools", focus: "Food and drink" },
+      cues: [
+        { word: "canteen", target: "Food and drink", figure: { label: "Canteen in 2025", value: 1616 } },
+        { word: "Orell", target: "Online shopping", figure: { label: "Orell Fuessli in 2025", value: 1747 } }
+      ]
+    },
+    {
+      say: "If you have no 3a yet, 200 francs a month into pillar 3a makes 2,400 in a year.",
+      scene: { type: "jars", focus: "3a" },
+      cues: [
+        { word: "pillar", target: "3a" },
+        { word: "2,400", figure: { label: "In pillar 3a after one year", value: 2400 } }
+      ],
+      offer: true
+    }
+  );
   return script;
 }
 
@@ -434,41 +518,13 @@ export const SIDE_ANSWERS: SideAnswer[] = [
     ]
   },
   {
-    // Savings advice: fixed / adjustable / flexible, the realistic levers, then the one option (touch-confirmed).
+    // Savings advice: a subscription to cancel, payments worth comparing, the habits, then the one option (touch-confirmed).
     id: "save",
     lead: ["Happy to, let's look for room together."],
     match: asks(
       /\bhow\s+(can|could|do|should|would)\s+i\s+(save|spend\s+less|cut|put\s+aside|set\s+aside)|\b(save|saving)\s+(more\s+|some\s+)?money\b|\bwhere\s+(can|could|should)\s+i\s+(cut|save|spend\s+less|reduce)|\bwhat\s+(can|could|should)\s+i\s+do\s+(better|differently)|\b(cut|reduce|lower)\s+(down\s+)?(my\s+)?(spending|costs|expenses)\b|\bspend\s+less\b/
     ),
-    script: [
-      {
-        say: "Each month, 3,081 francs are fixed, 297 adjustable and 3,988 flexible.",
-        scene: { type: "pools" },
-        cues: [
-          { word: "fixed", target: "Housing" },
-          { word: "flexible", target: "Electronics" }
-        ]
-      },
-      {
-        say: "After the fixed costs, at most 4,383 francs of your salary are left each month.",
-        scene: { type: "pools" },
-        cues: [{ word: "left", target: "Left over", figure: { label: "Left each month after fixed costs", value: 4383 } }]
-      },
-      {
-        say: "Small levers: the canteen, 1,616 francs, and habits like Orell Fuessli, 1,747 in 24 purchases.",
-        scene: { type: "pools" },
-        cues: [{ word: "canteen", target: "Food and drink", figure: { label: "Canteen in 2025", value: 1616 } }]
-      },
-      {
-        say: "If you have no 3a yet, 200 francs a month into pillar 3a makes 2,400 in a year.",
-        scene: { type: "jars", focus: "3a" },
-        cues: [
-          { word: "pillar", target: "3a" },
-          { word: "2,400", figure: { label: "In pillar 3a after one year", value: 2400 } }
-        ],
-        offer: true
-      }
-    ]
+    script: saveAdviceScript()
   },
   {
     // Habits: what the list hides, what changed, the big one-offs and an honest small item. No offer.

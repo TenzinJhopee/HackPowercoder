@@ -54,7 +54,7 @@ export interface FactsExport {
   card_payment_dates: string[];
   /** What was kept last year and the fixed "Can I afford a 3,000 franc laptop?" example against it (not a forecast). */
   afford_example: FactsSummary["affordability"];
-  /** Habits a monthly saving can come from and the fixed 100 franc plan (lib/savings-plan.ts). */
+  /** Habits a monthly saving can come from, the subscriptions to cancel and payments to switch, and the fixed 100 franc plan (lib/savings-plan.ts). */
   savings: FactsSummary["savings"] & { months: number };
 }
 

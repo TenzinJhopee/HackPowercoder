@@ -3,7 +3,7 @@ import test from "node:test";
 import { getMerchantTags, getTransactions, getUserNotes } from "../lib/database";
 import { runDirector } from "../lib/director/run";
 import { stageScript } from "../lib/director/staging";
-import { savingsAmounts } from "../lib/director/validate";
+import { savingsAmounts, validateScript } from "../lib/director/validate";
 import type { Beat } from "../lib/contracts";
 
 // What the model really returned for "I need to save 100 francs": the current screen copied into every beat.
@@ -107,4 +107,18 @@ test("a flexible-spending answer that pastes the screen into every beat is stage
   // A group that opens its sentence cannot be a cue word (never first); the focus still moves, and cues that exist are real words.
   assert.deepEqual(response.script[1].cues, [{ word: "Digitec", target: "Electronics" }]);
   for (const beat of response.script) for (const cue of beat.cues ?? []) assert.ok(beat.say.includes(cue.word));
+});
+
+test("from the opening view the first beat may go straight to the scene the answer needs", () => {
+  const script: Beat[] = [
+    { say: "Flexible spending is about 3,988 francs a month.", scene: { type: "pools", focus: "Flexible" } },
+    { say: "Electronics cost 13,160 francs this year.", scene: { type: "pools", focus: "Electronics" } }
+  ];
+  const fromGalaxy = validateScript({ script }, { currentScene: "galaxy", allowed: new Set([3988, 13160]), monthTotals: Array(12).fill(20000) });
+  assert.ok(fromGalaxy.ok);
+  if (fromGalaxy.ok) assert.deepEqual(fromGalaxy.script[0].scene, { type: "pools", focus: "Flexible" });
+
+  const fromMonthly = validateScript({ script }, { currentScene: "monthly", allowed: new Set([3988, 13160]), monthTotals: Array(12).fill(20000) });
+  assert.ok(fromMonthly.ok);
+  if (fromMonthly.ok) assert.equal(fromMonthly.script[0].scene?.type, "monthly");
 });

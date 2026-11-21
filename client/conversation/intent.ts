@@ -107,6 +107,18 @@ export function classify(text: string, targets: (string | number)[] = []): Inten
   return "question";
 }
 
+/**
+ * "Can you repeat your advice?", "say that again", "what did you just say?": the user wants the last answer again.
+ * The engine replays it word for word instead of asking the director, which has no memory of what it said.
+ */
+const REPEAT =
+  /\b(repeat|say (that|it|this) (again|once more)|once more|one more time|come again|again please|(what|which) (was|were) (your|the|that) (advice|answer|tip|suggestion|point)s?|what did you (just )?(say|suggest|recommend)|tell me (that|it) again|(go|run) (through|over) (that|it) again)\b/;
+
+export function isRepeatRequest(text: string): boolean {
+  const t = stripFiller(lower(text).trim().replace(/[.!?,;]+$/, ""));
+  return REPEAT.test(t);
+}
+
 /** Reply to a question beat: the answer whose label it is, else a yes/no style match. null = not an answer. */
 export function matchAnswer(text: string, answers: BeatAnswer[]): BeatAnswer | null {
   const t = stripFiller(lower(text).trim().replace(/[.!?,;]+$/, ""));

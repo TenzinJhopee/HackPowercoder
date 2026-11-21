@@ -57,8 +57,9 @@ function Row({ point, open, onToggle, onAnswer }: { point: OpenPoint; open: bool
 /**
  * The questions the presentation asked, each with how the advisor works until it is answered. Answering never stops playback.
  * Kept short: only one unanswered point is open at a time, by default the one asked last.
+ * Answers are remembered across runs; "Forget my answers" deletes them and turns the points back into open ones.
  */
-export function OpenPoints({ points, onAnswer }: { points: OpenPoint[]; onAnswer: (id: string, subject: string) => void }) {
+export function OpenPoints({ points, onAnswer, onForget }: { points: OpenPoint[]; onAnswer: (id: string, subject: string) => void; onForget?: () => void }) {
   // A manual choice holds until the next question is asked (the list grows) or the chosen point is answered.
   const [picked, setPicked] = useState<{ subject: string | null; count: number } | null>(null);
   const unanswered = points.filter((p) => p.answer === null);
@@ -82,6 +83,15 @@ export function OpenPoints({ points, onAnswer }: { points: OpenPoint[]; onAnswer
           />
         ))}
       </ul>
+      {onForget && unanswered.length < points.length && (
+        <button
+          type="button"
+          onClick={onForget}
+          className={`mt-2.5 rounded-md text-[11px] font-medium text-faint underline-offset-2 transition-colors hover:text-soft hover:underline ${focusRing}`}
+        >
+          Forget my answers
+        </button>
+      )}
     </section>
   );
 }

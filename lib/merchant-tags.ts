@@ -29,6 +29,21 @@ export interface MerchantTag {
   reason: string;
   /** Set when the tag is uncertain: the agent asks this instead of asserting. */
   askUser?: string;
+  /**
+   * What she can do about it when it is an active recurring payment (the only place this rule lives):
+   *   cancel  an optional subscription; dropping it saves its full monthly amount.
+   *   switch  needed, but a cheaper provider or plan is a normal option; no saving figure (market prices are unknown).
+   * An untagged recurring payment (rent, for example) is neither.
+   */
+  lever?: Lever;
+}
+
+export interface Lever {
+  kind: "cancel" | "switch";
+  /** How it is called in speech ("health insurance"); the merchant name when omitted. */
+  name?: string;
+  /** For a switch: the generic way to a cheaper option, never a named provider ("comparing insurers"). */
+  how?: string;
 }
 
 /** The only user-facing wording for necessity; the model must not invent its own. */
@@ -47,13 +62,15 @@ const defaultReasons: Record<Necessity, string> = {
   discretionary: "The user's free choice."
 };
 
-type Rule = [Necessity, SpendingGroup, { reason?: string; askUser?: string }?];
+type Rule = [Necessity, SpendingGroup, { reason?: string; askUser?: string; lever?: Lever }?];
+
+const subscription: Lever = { kind: "cancel" };
 
 const rules: Record<string, Rule> = {
   // compulsory
   "Rent": ["compulsory", "Housing", { reason: "Monthly rent." }],
   "BKW": ["compulsory", "Housing", { reason: "Electricity bill." }],
-  "Krankenkasse": ["compulsory", "Health", { reason: "Mandatory health insurance premium." }],
+  "Krankenkasse": ["compulsory", "Health", { reason: "Mandatory health insurance premium.", lever: { kind: "switch", name: "health insurance", how: "comparing insurers" } }],
   "Hügi Optik": ["compulsory", "Health", { reason: "Glasses; a health expense." }],
   "Steuerverwaltung": ["compulsory", "Tax", { reason: "Tax payment." }],
   "Bundesamts für Zoll und Grenzsicherheit (BAZG)": ["compulsory", "Transport", { reason: "Customs fee." }],
@@ -64,10 +81,10 @@ const rules: Record<string, Rule> = {
   "SBB CFF FSS Ticket Shop": ["reducible", "Transport"],
   "Schweizerische Bundesbahnen": ["reducible", "Transport"],
   "Taxi": ["reducible", "Travel"],
-  "Mobile Provider": ["reducible", "Electronics"],
-  "Netflix": ["reducible", "Electronics"],
-  "Spotify": ["reducible", "Electronics"],
-  "Teleboy": ["reducible", "Electronics"],
+  "Mobile Provider": ["reducible", "Electronics", { lever: { kind: "switch", name: "mobile plan", how: "a cheaper plan" } }],
+  "Netflix": ["reducible", "Electronics", { lever: subscription }],
+  "Spotify": ["reducible", "Electronics", { lever: subscription }],
+  "Teleboy": ["reducible", "Electronics", { lever: subscription }],
   "iTunes.com": ["reducible", "Electronics"],
   "Microsoft": ["reducible", "Electronics"],
   // discretionary: travel
@@ -133,7 +150,8 @@ export function ruleTags(): MerchantTag[] {
     group,
     source: "rule",
     reason: extra?.reason ?? defaultReasons[necessity],
-    askUser: extra?.askUser
+    askUser: extra?.askUser,
+    ...(extra?.lever ? { lever: extra.lever } : {})
   }));
 }
 

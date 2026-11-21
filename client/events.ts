@@ -28,7 +28,10 @@ export type EngineEvent =
   | { type: "script"; kind: "main" | "side"; script: Script; source?: DirectorResponse["source"] }
   /** A main beat asked the user (show its answers as chips); null when it is answered or dropped. */
   | { type: "question"; question: BeatQuestion | null }
-  /** Every question asked so far (in order), answered or not; empty after a start over. */
+  /**
+   * Every question asked so far (in order), answered or not, plus the remembered (saved) answers, which are listed
+   * answered from the start of a run. A start over keeps only the answered points.
+   */
   | { type: "openPoints"; points: OpenPoint[] }
   /** A prepared answer leaves something to keep (the savings slip). Emitted after its "script"; its side beats reveal it line by line. */
   | { type: "keep"; keepsake: Keepsake }

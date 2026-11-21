@@ -1,13 +1,14 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { allLines } from "../content/scripts";
+import { MAIN, allLines } from "../content/scripts";
 import { audioKey, type SpeechPayload, type VoiceManifest } from "../lib/contracts";
 import { speakWithElevenLabs } from "../lib/elevenlabs";
 
 /**
  * Pre-generates audio for every prepared line in content/scripts.ts (main beats, bridges, prepared side answers,
- * fixed lines) into public/voice/{audioKey(text)}.mp3 + .json and public/voice/manifest.json.
+ * fixed lines, and the recall lines said instead of an already answered question) into
+ * public/voice/{audioKey(text)}.mp3 + .json and public/voice/manifest.json.
  * Lines whose files already exist are skipped. `--dry-run` lists lines and keys without calling ElevenLabs.
  */
 
@@ -30,7 +31,8 @@ async function readManifest(): Promise<VoiceManifest> {
 
 async function main() {
   const dryRun = process.argv.includes("--dry-run");
-  const lines = allLines().map((text) => ({ text, key: audioKey(text) }));
+  const recalls = MAIN.flatMap((beat) => beat.question?.answers.flatMap((a) => (a.recall ? [a.recall] : [])) ?? []);
+  const lines = [...new Set([...allLines(), ...recalls])].map((text) => ({ text, key: audioKey(text) }));
 
   if (dryRun) {
     for (const { text, key } of lines) {

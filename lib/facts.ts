@@ -1,9 +1,9 @@
 import { measureAgainstSurplus, type AffordMeasure } from "@/lib/afford";
 import { cardBudgetMonthly, cardCycles, cardPayments } from "@/lib/card-cycle";
-import { getBalanceSeries } from "@/lib/intelligence";
+import { detectRecurringPayments, getBalanceSeries } from "@/lib/intelligence";
 import { groupLabels, necessities, necessityLabels, ruleTags, type MerchantTag } from "@/lib/merchant-tags";
 import type { Transaction } from "@/lib/models";
-import { savingsPlan, type Habit, type SavingsPlan } from "@/lib/savings-plan";
+import { savingsPlan, type Cancellable, type Habit, type SavingsPlan, type Switchable } from "@/lib/savings-plan";
 import { getSpendingProfile, type SpendingProfile } from "@/lib/profile";
 
 /**
@@ -68,8 +68,11 @@ export interface FactsSummary {
   /**
    * "How can I save X a month?": the repeated habits a cut can come from (refund-heavy and stopped ones left out),
    * and the plan for the fixed 100 franc example. `each` in a cut is the average price of one purchase.
+   * cancel: active subscriptions she could drop (savesMonthly / savesYearly are the full amounts, largest first).
+   * switch: active payments she needs where a cheaper provider or plan is the lever (costsMonthly only, largest first).
+   * Both come from the recurring payments and the merchant tags' `lever`.
    */
-  savings: { habits: Habit[]; excluded: string[]; example: SavingsPlan };
+  savings: { habits: Habit[]; excluded: string[]; example: SavingsPlan; cancel: Cancellable[]; switch: Switchable[] };
   /** The one option the advisor may offer; confirmed by touch only. */
   offer: { product: string; monthly: number; after_one_year: number };
   insights: Insight[];
@@ -391,7 +394,7 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
       adjustable: profile.levers.adjustable.map((m) => ({ merchant: m.merchant, yearly: m.net })),
       flexibleHabits: profile.levers.flexibleHabits.map((m) => ({ merchant: m.merchant, yearly: m.net, purchases: m.count }))
     },
-    savings: savingsOf(profile, insights),
+    savings: savingsOf(profile, insights, selected, tags),
     offer: { ...OFFER },
     insights,
     openQuestions: insights.filter((i) => i.mode === "ask").map((i) => ({ subject: i.id, question: i.question!, answers: i.answers! })),
@@ -410,11 +413,31 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
   };
 }
 
-/** Habits a monthly saving can come from, and the plan for the fixed example. */
-function savingsOf(profile: SpendingProfile, insights: Insight[]): FactsSummary["savings"] {
+/** Habits a monthly saving can come from, the recurring payments she could cancel or switch, and the plan for the fixed example. */
+function savingsOf(profile: SpendingProfile, insights: Insight[], transactions: Transaction[], tags: MerchantTag[]): FactsSummary["savings"] {
   const habits: Habit[] = [...profile.levers.adjustable, ...profile.levers.flexibleHabits].map((m) => ({ merchant: m.merchant, group: m.group, yearly: m.net, purchases: m.count }));
   const excluded = insights.filter((i) => i.id.startsWith("refund_heavy:") || i.id.startsWith("habit_stopped:")).map((i) => String(i.figures.merchant));
-  return { habits, excluded, example: savingsPlan(SAVINGS_EXAMPLE_TARGET, habits, profile.months, excluded) };
+  const { cancel, switch: switchable } = recurringLevers(transactions, profile.currency, tags);
+  return { habits, excluded, example: savingsPlan(SAVINGS_EXAMPLE_TARGET, habits, profile.months, excluded, cancel), cancel, switch: switchable };
+}
+
+/** Active recurring payments whose merchant tag carries a lever; an untagged one (rent) is neither. Largest first. */
+export function recurringLevers(transactions: Transaction[], currency: string, tags: MerchantTag[] = ruleTags()) {
+  const cancel: Cancellable[] = [];
+  const switchable: Switchable[] = [];
+  for (const flow of detectRecurringPayments(transactions, currency).filter((f) => f.active)) {
+    const tag = tags.find((t) => t.merchant === flow.name);
+    if (!tag?.lever) continue;
+    const name = tag.lever.name ?? tag.merchant;
+    if (tag.lever.kind === "cancel") {
+      cancel.push({ merchant: tag.merchant, name, group: tag.group, savesMonthly: Math.round(flow.monthlyAmount), savesYearly: Math.round(flow.monthlyAmount * 12) });
+    } else {
+      switchable.push({ merchant: tag.merchant, name, group: tag.group, costsMonthly: Math.round(flow.monthlyAmount), how: tag.lever.how ?? "comparing offers" });
+    }
+  }
+  cancel.sort((a, b) => b.savesMonthly - a.savesMonthly);
+  switchable.sort((a, b) => b.costsMonthly - a.costsMonthly);
+  return { cancel, switch: switchable };
 }
 
 /** The second of two identical charges; removed from the profile when the user confirms a duplicate. */

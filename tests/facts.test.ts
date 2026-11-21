@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import { allowedNumbers, buildFacts } from "../lib/facts";
+import { allowedNumbers, buildFacts, recurringLevers } from "../lib/facts";
 import { loadAccountCsv } from "../lib/load-accounts";
 
 const load = (file: string) => loadAccountCsv(fs.readFileSync(`data/${file}`, "utf8"), file).transactions;
@@ -19,6 +19,14 @@ test("detectors reproduce the verified findings", () => {
   assert.ok(byId(facts, "habit_stopped:Digitec Galaxus"));
   assert.ok(!facts.insights.some((i) => i.id.startsWith("double_charge:Swiss")), "group flight bookings are not double charges");
   assert.ok(allowedNumbers(facts).has(1352));
+});
+
+test("recurring levers: rent is neither, health insurance is switchable, Netflix cancellable", () => {
+  const { cancel, switch: switchable } = recurringLevers(transactions, "CHF");
+  const all = [...cancel, ...switchable].map((l) => l.merchant);
+  assert.ok(!all.includes("Rent"), "rent is neither cancellable nor switchable");
+  assert.deepEqual(switchable.map((s) => [s.merchant, s.costsMonthly]), [["Krankenkasse", 982], ["Mobile Provider", 20]]);
+  assert.deepEqual(cancel.map((c) => [c.merchant, c.savesMonthly, c.savesYearly]), [["Netflix", 21, 251]]);
 });
 
 test("a user answer resolves the question and updates the pot", () => {

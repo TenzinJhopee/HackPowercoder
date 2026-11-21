@@ -5,6 +5,11 @@ import { sceneTypes, type Beat, type Breakdown, type Cue, type Figure, type Scri
  * every figure the advisor says or shows must come from code.
  */
 
+/** The opening view (galaxy / logo pile) has no categories or months to focus, so an answer may leave it on its first beat. */
+export function isOpeningScene(scene: SceneType): boolean {
+  return scene === "galaxy";
+}
+
 export const MAX_BEATS = 5;
 export const MAX_SAY_CHARS = 260;
 export const MAX_CUES = 2;
@@ -255,10 +260,10 @@ export function validateScript(raw: unknown, ctx: ValidationContext): Validation
     if (beat.offer && !(ctx.allowOffer !== false && index === script.length - 1 && /\b3a\b/i.test(beat.say))) delete beat.offer;
   });
 
-  // The first beat stays on the scene she is looking at.
+  // The first beat stays on the scene she is looking at, except the opening view, which shows no data to stay on.
   const first = script[0];
   if (!first.scene) first.scene = { type: ctx.currentScene };
-  else if (first.scene.type !== ctx.currentScene) first.scene = { type: ctx.currentScene };
+  else if (first.scene.type !== ctx.currentScene && !isOpeningScene(ctx.currentScene)) first.scene = { type: ctx.currentScene };
 
   return { ok: true, script, dropped };
 }

@@ -93,8 +93,8 @@ const QUESTION_SCRIPT: Script = [
       label: "Pillar 3a and savings",
       assume: "Until you tell me, I keep the pillar 3a option in the plan.",
       answers: [
-        { id: "has_elsewhere", label: "Yes, at another bank", kind: "yes", skipOffer: true },
-        { id: "none", label: "No, I have none", kind: "no" },
+        { id: "has_elsewhere", label: "Yes, at another bank", kind: "yes", skipOffer: true, recall: "You told me your pillar 3a is at another bank." },
+        { id: "none", label: "No, I have none", kind: "no", recall: "You told me you have no pillar 3a yet." },
       ],
     },
   },
@@ -102,12 +102,97 @@ const QUESTION_SCRIPT: Script = [
   { say: "That was your year.", scene: { type: "galaxy" } },
 ];
 
-/** A notes endpoint that is offline: logs each POST, then fails. */
+/** A notes endpoint that is offline: logs each POST, then fails (the GET of saved answers fails too). */
 const offlineNotes = (notes: string[]) =>
   (async (input: RequestInfo | URL, init?: RequestInit) => {
-    notes.push(`${String(input)} ${String(init?.body)}`);
+    if (init?.method === "POST") notes.push(`${String(input)} ${String(init?.body)}`);
     throw new TypeError("offline");
   }) as typeof fetch;
+
+/** A notes endpoint holding `saved`: GET returns them (or fails with `getStatus`); logs "METHOD url". */
+const savedNotes = (saved: { subject: string; answer: string }[], calls: string[], getStatus = 200) =>
+  (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    calls.push(`${method} ${String(input)}`);
+    if (method === "GET") return new Response(JSON.stringify(saved.map((n) => ({ ...n, text: "", createdAt: "" }))), { status: getStatus });
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  }) as typeof fetch;
+
+/** Runs QUESTION_SCRIPT to its end against `fetcher`; records modes, question events and the points at the first line. */
+async function runRemembered(fetcher: typeof fetch, questionPauseMs = 60_000) {
+  const log: string[] = [];
+  const talk = new Conversation({ world: new StubWorld({ log }), voice: new FakeVoice(log, () => false), main: QUESTION_SCRIPT, fetch: fetcher, backup: true, questionPauseMs });
+  const seen = { modes: [] as string[], asked: 0, offers: 0, points: [] as import("../client/events").OpenPoint[], atFirstLine: null as import("../client/events").OpenPoint[] | null };
+  talk.on((event) => {
+    if (event.type === "mode") seen.modes.push(event.mode);
+    if (event.type === "question" && event.question) seen.asked++;
+    if (event.type === "offer") seen.offers++;
+    if (event.type === "openPoints") seen.points = event.points;
+    if (event.type === "line" && !seen.atFirstLine) seen.atFirstLine = seen.points;
+  });
+  await talk.start();
+  return { talk, log, seen };
+}
+
+test("remembered answer: recall line instead of the question, no pause, point answered from the start", async () => {
+  const calls: string[] = [];
+  const { talk, log, seen } = await runRemembered(savedNotes([{ subject: "no_pillar_3a", answer: "none" }], calls));
+  assert.equal(talk.mode, "finished");
+  assert.ok(log.includes("say:You told me you have no pillar 3a yet.") && !log.includes(`say:${QUESTION_SCRIPT[1].say}`));
+  assert.ok(!seen.modes.includes("answering") && seen.asked === 0, "no pause, no chips");
+  assert.deepEqual(seen.atFirstLine?.map((p) => [p.subject, p.answer]), [["no_pillar_3a", "none"]]);
+  assert.ok(log.includes(`say:${QUESTION_SCRIPT[2].say}`) && seen.offers === 1, "'none' keeps the offer");
+  assert.deepEqual(calls, ["GET /api/notes"]);
+
+  // Start over keeps the remembered point and does not ask again.
+  await talk.start();
+  assert.equal(log.filter((l) => l === "say:You told me you have no pillar 3a yet.").length, 2);
+  assert.deepEqual(seen.points.map((p) => p.answer), ["none"]);
+});
+
+test("remembered has_elsewhere skips the offer", async () => {
+  const { log, seen } = await runRemembered(savedNotes([{ subject: "no_pillar_3a", answer: "has_elsewhere" }], []));
+  assert.ok(log.includes("say:You told me your pillar 3a is at another bank."));
+  assert.ok(!log.includes(`say:${QUESTION_SCRIPT[2].say}`) && seen.offers === 0);
+  assert.ok(log.includes(`say:${QUESTION_SCRIPT[3].say}`));
+});
+
+test("forget deletes the saved answers and turns the points unanswered; the question is asked again", async () => {
+  const calls: string[] = [];
+  const { talk, log, seen } = await runRemembered(savedNotes([{ subject: "no_pillar_3a", answer: "has_elsewhere" }], calls), 5);
+  await talk.forget();
+  assert.ok(calls.includes("DELETE /api/notes?subject=no_pillar_3a"), calls.join(" | "));
+  assert.deepEqual(seen.points.map((p) => [p.subject, p.answer]), [["no_pillar_3a", null]]);
+  assert.equal(talk.mode, "finished", "forget does not touch playback");
+  await talk.start();
+  assert.ok(log.includes(`say:${QUESTION_SCRIPT[1].say}`) && seen.asked === 1, "asked again after forget");
+  assert.ok(log.includes(`say:${QUESTION_SCRIPT[2].say}`), "the offer is back");
+});
+
+test("a failing load of saved answers behaves like no notes", async () => {
+  for (const fetcher of [savedNotes([{ subject: "no_pillar_3a", answer: "has_elsewhere" }], [], 500), offlineNotes([])]) {
+    const { log, seen } = await runRemembered(fetcher, 5);
+    assert.ok(log.includes(`say:${QUESTION_SCRIPT[1].say}`) && seen.asked === 1 && seen.modes.includes("answering"));
+    assert.deepEqual(seen.points.map((p) => p.answer), [null]);
+    assert.ok(seen.offers === 1);
+  }
+});
+
+test("recall lines in MAIN follow the script rules and keep the beat's cues", async () => {
+  const { MAIN: SCRIPT } = await import("../content/scripts");
+  const { cueWordIndices } = await import("../client/player/player");
+  const numbers = (text: string) => text.match(/\d[\d,']*/g) ?? [];
+  const beats = SCRIPT.filter((b) => b.question);
+  assert.equal(beats.length, 4);
+  for (const beat of beats) {
+    for (const answer of beat.question!.answers) {
+      const recall = answer.recall ?? "";
+      assert.ok(recall && recall.split(/\s+/).length <= 18 && /you told me/i.test(recall) && !/CHF/.test(recall), `${answer.id}: ${recall}`);
+      assert.ok(cueWordIndices(recall, beat.cues).every((i) => i > 0), `cues in: ${recall}`);
+      for (const n of numbers(recall)) assert.ok(beat.say.includes(n), `${n} not in the beat: ${recall}`);
+    }
+  }
+});
 
 test("question beat: pause, answer, save note (offline), continue, offer skipped", async () => {
   const log: string[] = [];

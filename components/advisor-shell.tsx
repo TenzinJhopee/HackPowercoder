@@ -49,7 +49,7 @@ export function AdvisorShell() {
                 <Transcript log={advisor.log} line={advisor.line} lineKind={advisor.lineKind} />
                 {advisor.points.length > 0 && (
                   <div className="md:max-h-44 md:shrink-0 md:overflow-y-auto">
-                    <OpenPoints points={advisor.points} onAnswer={advisor.answer} />
+                    <OpenPoints points={advisor.points} onAnswer={advisor.answer} onForget={advisor.forget} />
                   </div>
                 )}
                 {advisor.slip && (

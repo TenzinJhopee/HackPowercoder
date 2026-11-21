@@ -2438,6 +2438,16 @@
       "target": 100,
       "cuts": [
         {
+          "kind": "cancel",
+          "merchant": "Netflix",
+          "group": "Electronics",
+          "fewer": 1,
+          "usualPerMonth": 1,
+          "each": 21,
+          "saves": 21
+        },
+        {
+          "kind": "habit",
           "merchant": "Orell Fuessli",
           "group": "Online shopping",
           "fewer": 1,
@@ -2446,19 +2456,45 @@
           "saves": 73
         },
         {
+          "kind": "habit",
           "merchant": "Kantine AG",
           "group": "Food and drink",
-          "fewer": 3,
+          "fewer": 1,
           "usualPerMonth": 10,
           "each": 13,
-          "saves": 40
+          "saves": 13
         }
       ],
-      "monthly": 113,
-      "yearly": 1356,
-      "reachable": 140,
+      "monthly": 107,
+      "yearly": 1284,
+      "reachable": 161,
       "shortfall": 0
     },
+    "cancel": [
+      {
+        "merchant": "Netflix",
+        "name": "Netflix",
+        "group": "Electronics",
+        "savesMonthly": 21,
+        "savesYearly": 251
+      }
+    ],
+    "switch": [
+      {
+        "merchant": "Krankenkasse",
+        "name": "health insurance",
+        "group": "Health",
+        "costsMonthly": 982,
+        "how": "comparing insurers"
+      },
+      {
+        "merchant": "Mobile Provider",
+        "name": "mobile plan",
+        "group": "Electronics",
+        "costsMonthly": 20,
+        "how": "a cheaper plan"
+      }
+    ],
     "months": 12
   }
 }
