@@ -192,6 +192,8 @@ export class Engine {
   spot = { x: 0, y: 0, r: 0, a: 0, aTo: 0 };
   /** A ring travelling out through a cluster (focus "ripple"). */
   ripple = { on: false, x: 0, y: 0, R: 0, t0: 0, dur: 1300 };
+  /** The arrow that lands on a newly focused item (world point x, y; R = size of what it hits). */
+  private arrow = { on: false, x: 0, y: 0, R: 0, t0: 0 };
   private breath = { t0: 0, dur: 0, amount: 0 };
   private sparks: Spark[] = Array.from({ length: SPARKS }, () => ({ on: false, sx: 0, sy: 0, cx: 0, cy: 0, ex: 0, ey: 0, t0: 0, dur: 1, r: 2, fill: "" }));
   private spotGradient: { g: CanvasGradient; x: number; y: number; r: number } | null = null;
@@ -399,6 +401,20 @@ export class Engine {
     r.y = y;
     r.R = Math.max(R, 12);
     r.t0 = performance.now() + delay;
+  }
+
+  /**
+   * An arrow flies in and sticks at a world point (the top of the focused item), quivers like William Tell's
+   * and leaves a target ring. Lasts about 2.6 s, then fades. Skipped for reduced motion.
+   */
+  shoot(x: number, y: number, R: number, delay = 380): void {
+    if (this.reduced) return;
+    const a = this.arrow;
+    a.on = true;
+    a.x = x;
+    a.y = y;
+    a.R = R;
+    a.t0 = performance.now() + delay;
   }
 
   /** Taşıma: a few sparks leave a world cluster and travel to the top centre of the stage (where the big figure sits). */
@@ -640,7 +656,101 @@ export class Engine {
     if (ringR > 0) this.drawRing(ctx, ringR, ringFade);
     if (this.spot.a > 0.01) this.drawSpot(ctx);
     this.drawSparks(ctx, now);
+    this.drawArrow(ctx, now);
     this.layer?.drawOver?.(ctx, now);
+  }
+
+  /** Flight (0.28 s), a damped quiver on impact, two target rings, then a slow fade. Screen-space, so its size does not follow the zoom. */
+  private drawArrow(ctx: CanvasRenderingContext2D, now: number): void {
+    const ar = this.arrow;
+    if (!ar.on) return;
+    const t = now - ar.t0;
+    const FLIGHT = 280;
+    const HOLD = 2300;
+    const FADE = 450;
+    if (t > HOLD + FADE) {
+      ar.on = false;
+      return;
+    }
+    if (t < 0) return;
+
+    const [cx, ty] = this.toScreen(ar.x, ar.y);
+    const L = 84;
+    // Come in from the upper right; from the side when the target is near the top, mirrored near the right edge.
+    let heading = ty > L * 0.9 ? -Math.PI * 0.34 : -Math.PI * 0.1;
+    if (cx + L * Math.cos(heading) > this.width - 14) heading = Math.PI - heading;
+    // Hit a little off the centre, on the side the arrow comes from, so it never covers the label above the item.
+    const tx = cx + Math.sign(Math.cos(heading)) * 20;
+
+    const q = t - FLIGHT;
+    const flying = clamp(t / FLIGHT, 0, 1);
+    const approach = (1 - easeOutCubic(flying)) * 300;
+    // Damped quiver around the stuck pose, about the tip.
+    const quiver = q > 0 ? 0.13 * Math.exp(-q / 230) * Math.cos(q / 34) : 0;
+    const a = heading + quiver;
+    const dx = Math.cos(a);
+    const dy = Math.sin(a);
+    const px = -dy;
+    const py = dx;
+    const alpha = Math.min(1, flying * 4) * (t > HOLD ? 1 - (t - HOLD) / FADE : 1);
+    const hx = tx + Math.cos(heading) * approach;
+    const hy = ty + Math.sin(heading) * approach;
+
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    // Target rings at the point of impact.
+    if (q > 0) {
+      const ring = (delay: number, color: string, maxR: number) => {
+        const p = clamp((q - delay) / 560, 0, 1);
+        if (p <= 0 || p >= 1) return;
+        ctx.globalAlpha = alpha * 0.6 * (1 - p);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.4 - p * 1.4;
+        ctx.beginPath();
+        ctx.arc(tx, ty, 4 + maxR * easeOutCubic(p), 0, TAU);
+        ctx.stroke();
+      };
+      ring(0, theme.paper, 34);
+      ring(110, theme.sun, 52);
+      ctx.globalAlpha = alpha;
+    }
+
+    // Shaft.
+    ctx.strokeStyle = theme.paper;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(hx, hy);
+    ctx.lineTo(hx + dx * L, hy + dy * L);
+    ctx.stroke();
+
+    // Fletching: two sun-yellow feathers with a teal outline at the tail.
+    ctx.fillStyle = theme.sun;
+    ctx.lineWidth = 1.2;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(hx + dx * (L - 26), hy + dy * (L - 26));
+      ctx.lineTo(hx + dx * (L - 8) + px * side * 9, hy + dy * (L - 8) + py * side * 9);
+      ctx.lineTo(hx + dx * (L + 3) + px * side * 9, hy + dy * (L + 3) + py * side * 9);
+      ctx.lineTo(hx + dx * (L - 10), hy + dy * (L - 10));
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Head: a solid teal arrowhead pointing at the target.
+    ctx.fillStyle = theme.paper;
+    ctx.beginPath();
+    ctx.moveTo(hx - dx * 3, hy - dy * 3);
+    ctx.lineTo(hx + dx * 15 + px * 6, hy + dy * 15 + py * 6);
+    ctx.lineTo(hx + dx * 15 - px * 6, hy + dy * 15 - py * 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   /** One radial gradient over the whole view, cached while the spot stays put. */
