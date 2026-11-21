@@ -27,8 +27,8 @@ test("selects a deterministic financial tool for each supported intent", () => {
   assert.equal(selectFinancialTool("How much did I spend this month?"), "get_monthly_spending");
   assert.equal(selectFinancialTool("What are my three biggest spending categories?"), "get_spending_by_category");
   assert.equal(selectFinancialTool("Where does most of my money go?"), "get_spending_by_category");
-  assert.equal(selectFinancialTool("How can I save CHF 500 monthly?"), "get_savings_opportunities");
-  assert.equal(selectFinancialTool("How much could I save each month?"), "get_savings_opportunities");
+  assert.equal(selectFinancialTool("How can I save CHF 500 monthly?"), "get_spending_profile");
+  assert.equal(selectFinancialTool("How much could I save each month?"), "get_spending_profile");
   assert.equal(selectFinancialTool("Brainstorm cheap food and budget ideas"), "get_savings_opportunities");
   assert.equal(selectFinancialTool("Can you create a monthly budget based on my actual transactions?"), "create_budget");
   assert.equal(selectFinancialTool("What is my budget status?"), "get_budget_status");

@@ -10,6 +10,13 @@ import {
   summarizeMonth
 } from "@/lib/intelligence";
 import type { Budget, Transaction, UpcomingBill } from "@/lib/models";
+import type { MerchantTag } from "@/lib/merchant-tags";
+import { getSpendingProfile } from "@/lib/profile";
+
+/** Necessity × pattern profile: the basis for "how can I save?" answers. */
+export function get_spending_profile(transactions: Transaction[], currency: string, tags?: MerchantTag[]) {
+  return getSpendingProfile(transactions, currency, tags);
+}
 
 export function get_financial_summary(transactions: Transaction[], currency: string) {
   const analysis = analyzeTransactions(transactions, currency);

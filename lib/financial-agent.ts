@@ -8,8 +8,10 @@ import {
   get_monthly_spending,
   get_recurring_payments,
   get_savings_opportunities,
-  get_spending_by_category
+  get_spending_by_category,
+  get_spending_profile
 } from "@/lib/financial-tools";
+import type { MerchantTag } from "@/lib/merchant-tags";
 
 export const financialToolNames = [
   "get_financial_summary",
@@ -20,7 +22,8 @@ export const financialToolNames = [
   "create_budget",
   "get_budget_status",
   "get_cashflow_forecast",
-  "get_balance_series"
+  "get_balance_series",
+  "get_spending_profile"
 ] as const;
 
 export type FinancialToolName = (typeof financialToolNames)[number];
@@ -32,6 +35,8 @@ export interface FinancialAgentContext {
   bills: UpcomingBill[];
   /** Known balance before the first transaction; never invented by code (defaults to 0). */
   openingBalance?: number;
+  /** Merchant tags from the database; falls back to the seeded rules. */
+  merchantTags?: MerchantTag[];
 }
 
 // Fallback keyword router (English + Turkish). The LLM tool-call path is primary.
@@ -43,7 +48,7 @@ export function selectFinancialTool(question: string): FinancialToolName {
   if (/forecast|predict|projection|in \d+ days|next month|enough money|cash ?flow|önümüzdeki ay|gelecek ay|tahmin/.test(text)) return "get_cashflow_forecast";
   if (/recurring|subscription|repeat payment|regular payment|abonelik|düzenli ödeme/.test(text)) return "get_recurring_payments";
   if (/cheap|affordable|low[- ]cost|grocer|food|meal|recipe|brainstorm|ucuz|yemek/.test(text)) return "get_savings_opportunities";
-  if (/save|saving|reduce|cut back|optimis|optimize|tasarruf|biriktir/.test(text)) return "get_savings_opportunities";
+  if (/save|saving|reduce|cut back|optimis|optimize|tasarruf|biriktir|profil|sabit gider|esnek|zorunlu/.test(text)) return "get_spending_profile";
   if (/category|categories|where does|where is|most of my|breakdown|kategori|nereye (?:gidiyor|gitti)/.test(text)) return "get_spending_by_category";
   if (/this month|monthly spending|how much (?:did|do) i spend|expenses this month|spent|bu ay|harcadım|harcama/.test(text)) return "get_monthly_spending";
   return "get_financial_summary";
@@ -69,5 +74,7 @@ export function executeFinancialTool(name: FinancialToolName, context: Financial
       return get_cashflow_forecast(context.transactions, context.bills, context.currency);
     case "get_balance_series":
       return get_balance_series(context.transactions, context.currency, context.openingBalance ?? 0);
+    case "get_spending_profile":
+      return get_spending_profile(context.transactions, context.currency, context.merchantTags);
   }
 }
