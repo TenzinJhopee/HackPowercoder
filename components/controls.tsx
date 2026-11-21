@@ -96,7 +96,7 @@ export function Chips({ mode, canContinue, question, onStart, onSay, onResume, o
     finished: [{ label: "Start over", run: onStart, primary: true }]
   };
   return (
-    <div className="flex min-h-[4.5rem] flex-wrap content-start gap-2">
+    <div className="flex min-h-[4.5rem] flex-wrap content-start gap-2 md:max-h-28 md:min-h-0 md:shrink-0 md:overflow-y-auto">
       {chips[mode].map((chip) => (
         <button
           key={chip.label}

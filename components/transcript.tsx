@@ -50,7 +50,7 @@ export function Transcript({ log, line, lineKind }: { log: LogEntry[]; line: Cap
   }, [log.length, line?.spoken, line?.words]);
 
   return (
-    <section aria-label="Conversation" className="rounded-2xl border border-line bg-surface shadow-card">
+    <section aria-label="Conversation" className="rounded-2xl border border-line bg-surface shadow-card md:flex md:min-h-0 md:flex-1 md:flex-col">
       <div
         ref={box}
         role="log"
@@ -59,7 +59,7 @@ export function Transcript({ log, line, lineKind }: { log: LogEntry[]; line: Cap
           const el = event.currentTarget;
           follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
         }}
-        className="max-h-[17rem] min-h-[7rem] space-y-3 overflow-y-auto px-4 py-4 md:max-h-[22rem] lg:max-h-[min(25rem,44vh)]"
+        className="max-h-[17rem] min-h-[7rem] space-y-3 overflow-y-auto px-4 py-4 md:max-h-none md:min-h-0 md:flex-1"
       >
         {log.map((entry) =>
           entry.role === "user" ? (

@@ -64,12 +64,12 @@ function FigureCounter({ change }: { change: FigureChange | null }) {
 
 export function Stage({ world, figure, pausedAt }: { world: GrainWorld; figure: FigureChange | null; pausedAt: string | null }) {
   return (
-    <section aria-label="Stage" className="rounded-2xl border border-line bg-surface p-5 shadow-card md:p-6">
+    <section aria-label="Stage" className="rounded-2xl border border-line bg-surface p-5 shadow-card md:flex md:h-full md:min-h-0 md:flex-col md:p-5">
       <FigureCounter change={figure} />
-      <div className="mt-2 h-60 w-full overflow-hidden sm:h-80 md:h-[26rem] lg:h-[min(32rem,62vh)] lg:min-h-[24rem]">
+      <div className="mt-2 h-60 w-full overflow-hidden sm:h-80 md:h-auto md:min-h-0 md:flex-1">
         <StageCanvas world={world} />
       </div>
-      <div className="mt-3 flex min-h-[1.75rem] items-center justify-between gap-3">
+      <div className="mt-3 flex min-h-[1.75rem] shrink-0 items-center justify-between gap-3">
         <p className="text-xs text-faint">1 grain = CHF 100</p>
         {pausedAt && <span className="rounded-full bg-saved/10 px-3 py-1 text-xs font-medium text-saved-ink">{`↩ Paused at ${pausedAt}`}</span>}
       </div>

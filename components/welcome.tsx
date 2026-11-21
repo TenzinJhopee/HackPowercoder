@@ -60,7 +60,7 @@ const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:o
  */
 export function Welcome({ onSay, onStart }: { onSay: (text: string) => void; onStart: () => void }) {
   return (
-    <section aria-label="Welcome" className="flex flex-col gap-4">
+    <section aria-label="Welcome" className="flex min-h-0 flex-col gap-4 md:flex-1 md:overflow-y-auto md:pr-1">
       <div>
         <h1 className="text-2xl font-bold leading-tight tracking-tight text-ink md:text-[1.7rem]">What would you like to know?</h1>
         <p className="mt-1.5 text-sm leading-6 text-soft">Ask by voice or text. I answer from your own bookings, and every number comes from your data.</p>
