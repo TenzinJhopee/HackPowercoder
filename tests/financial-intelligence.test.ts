@@ -142,6 +142,30 @@ test("forecasts net flows using recurring payments, variable spending, and known
   assert.ok(forecast.assumptions.some((item) => item.includes("no starting balance")));
 });
 
+test("recurring detector needs regular gaps and stable amounts and marks stopped flows inactive", () => {
+  const rows: Transaction[] = [];
+  const month = (m: number) => String(m).padStart(2, "0");
+  // Insurance every month except March (one ~60-day gap).
+  for (const m of [1, 2, 4, 5, 6, 7, 8]) rows.push(transaction({ id: `ins-${m}`, date: `2025-${month(m)}-05`, amount: -982, category: "Insurance", merchant: "Insurer" }));
+  // Monthly dates, but one-off amounts (a bike and its parts).
+  [59, 6000, 5329, 135, 80].forEach((amount, i) => rows.push(transaction({ id: `bike-${i}`, date: `2025-0${i + 2}-10`, amount: -amount, category: "Shopping", merchant: "Bike shop" })));
+  // Regular and stable, but stopped in April while the data runs to the end of August.
+  for (const m of [1, 2, 3, 4]) rows.push(transaction({ id: `gym-${m}`, date: `2025-${month(m)}-15`, amount: -60, category: "Subscriptions", merchant: "Gym" }));
+  rows.push(transaction({ id: "last", date: "2025-08-28", amount: -30, merchant: "Kiosk" }));
+
+  const flows = analyzeTransactions(rows, "CHF").recurringPayments;
+  const insurance = flows.find((flow) => flow.name === "Insurer");
+  assert.ok(insurance?.active);
+  assert.equal(insurance.typicalAmount, 982);
+  assert.equal(insurance.lastDate, "2025-08-05");
+  assert.equal(flows.some((flow) => flow.name === "Bike shop"), false);
+  assert.equal(flows.find((flow) => flow.name === "Gym")?.active, false);
+
+  const forecast = forecastCashFlow(rows, [], "CHF", new Date("2025-08-31T00:00:00.000Z"));
+  assert.deepEqual(forecast.recurringExpenseFlows.map((flow) => flow.name), ["Insurer"]);
+  assert.equal(forecast.recurringExpensesMonthly, 982);
+});
+
 test("balance series is a running total from a given opening balance and finds the lowest points", () => {
   const rows = [
     transaction({ id: "a", date: "2025-08-31", amount: 100, originalAmount: 100, type: "income" }),

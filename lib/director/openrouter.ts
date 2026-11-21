@@ -1,5 +1,5 @@
 import { DIRECTOR_TIMEOUT_MS, DirectorError, parseJsonObject, type GenerateInput, type GenerateOutput } from "./claude";
-import { totalOf, seriesNames, type Series } from "./series";
+import { directorTools, runDirectorTool } from "./tools";
 
 /**
  * Director via OpenRouter's OpenAI-compatible Chat Completions API (e.g. Gemini 3.1 Flash Lite).
@@ -21,34 +21,10 @@ type ChatResponse = {
   error?: { code?: number | string; message?: string };
 };
 
-const totalTool = {
+const openRouterTools = directorTools.map((tool) => ({
   type: "function",
-  function: {
-    name: "total",
-    description: "Adds up the chosen months of a series. Use it whenever you need a total.",
-    parameters: {
-      type: "object",
-      properties: {
-        series: { type: "string", enum: [...seriesNames] },
-        months: { type: "array", items: { type: "integer", minimum: 1, maximum: 12 } }
-      },
-      required: ["series", "months"]
-    }
-  }
-};
-
-function runTotal(rawArguments: string, series: Series): { text: string; value?: number } {
-  let args: { series?: unknown; months?: unknown } = {};
-  try {
-    args = JSON.parse(rawArguments || "{}");
-  } catch {
-    return { text: "Invalid input: arguments must be JSON." };
-  }
-  const name = seriesNames.find((candidate) => candidate === args.series);
-  const total = name && Array.isArray(args.months) ? totalOf(series, name, args.months as number[]) : null;
-  if (total === null || !name) return { text: 'Invalid input: "series" must be monthly_spending or card_bill and "months" a list of integers 1-12.' };
-  return { text: String(total), value: total };
-}
+  function: { name: tool.name, description: tool.description, parameters: tool.input_schema }
+}));
 
 export async function generateScriptOpenRouter(
   input: GenerateInput,
@@ -71,7 +47,7 @@ export async function generateScriptOpenRouter(
       response = await fetch(ENDPOINT, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "X-Title": "Pfagent" },
-        body: JSON.stringify({ model, max_tokens: MAX_TOKENS, temperature: 0.2, tools: [totalTool], messages }),
+        body: JSON.stringify({ model, max_tokens: MAX_TOKENS, temperature: 0.2, tools: openRouterTools, messages }),
         signal: AbortSignal.timeout(remaining),
         cache: "no-store"
       });
@@ -92,8 +68,8 @@ export async function generateScriptOpenRouter(
     if (message.tool_calls?.length) {
       messages.push({ role: "assistant", content: message.content ?? null, tool_calls: message.tool_calls });
       for (const call of message.tool_calls) {
-        const result = call.function?.name === "total" ? runTotal(call.function.arguments, input.series) : { text: `Unknown tool ${call.function?.name}.` };
-        if (result.value !== undefined) toolResults.push(result.value);
+        const result = runDirectorTool(call.function?.name ?? "", call.function?.arguments ?? "{}", input);
+        toolResults.push(...result.numbers);
         messages.push({ role: "tool", tool_call_id: call.id, content: result.text });
       }
       continue;

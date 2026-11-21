@@ -24,7 +24,8 @@ export const palette = {
   spend: rgb(theme.spend),
   coral: rgb(theme.coral),
   saved: rgb(theme.saved),
-  faint: rgb(theme.faint)
+  faint: rgb(theme.faint),
+  brand: rgb(theme.brand)
 } as const;
 
 /** Overwrites an RGB triplet in place. Palette entries are shared by reference, so everything holding one follows. */
@@ -76,7 +77,9 @@ function ease(code: number, t: number): number {
 
 export type Motion =
   | { kind: "orbit"; cx: number; cy: number; radius: number; angle: number; speed: number; since: number }
-  | { kind: "flow"; x: number; spread: number; top: number; bottom: number; offset: number; speed: number; since: number };
+  | { kind: "flow"; x: number; spread: number; top: number; bottom: number; offset: number; speed: number; since: number }
+  /** A slow wander of up to `amp` around a fixed slot (two mixed sines per axis, never leaving the slot's room). */
+  | { kind: "wander"; x: number; y: number; amp: number; phase: number; speed: number; since: number };
 
 export type Grain = {
   id: number;
@@ -162,6 +165,7 @@ function sameMotion(a: Motion | null, b: Motion | null): boolean {
   if (!a || !b) return a === b;
   if (a.kind === "orbit" && b.kind === "orbit") return near(a.cx, b.cx) && near(a.cy, b.cy) && near(a.radius, b.radius);
   if (a.kind === "flow" && b.kind === "flow") return near(a.x, b.x) && near(a.top, b.top) && near(a.bottom, b.bottom);
+  if (a.kind === "wander" && b.kind === "wander") return near(a.x, b.x) && near(a.y, b.y) && Math.abs(a.amp - b.amp) < 0.1;
   return false;
 }
 
@@ -172,6 +176,12 @@ function motionPoint(m: Motion, now: number): typeof point {
     const angle = m.angle + m.speed * t;
     point.x = m.cx + Math.cos(angle) * m.radius;
     point.y = m.cy + Math.sin(angle) * m.radius;
+    point.fade = 1;
+  } else if (m.kind === "wander") {
+    const w = m.speed * t;
+    const p = m.phase;
+    point.x = m.x + m.amp * (0.7 * Math.sin(w + p) + 0.3 * Math.sin(2.3 * w + 1.9 * p));
+    point.y = m.y + m.amp * (0.7 * Math.sin(1.31 * w + 2.7 * p) + 0.3 * Math.sin(1.9 * w + 0.6 * p));
     point.fade = 1;
   } else {
     const span = m.bottom - m.top;
@@ -220,6 +230,15 @@ export class Engine {
   ripple = { on: false, x: 0, y: 0, R: 0, t0: 0, dur: 1300 };
   private labelQueue: LabelItem[] = [];
   private labelWidths = new Map<string, number>();
+  /**
+   * Hand zoom/pan over the scene's camera, in screen space: screen' = s * screen + (x, y). Gestures write `user`
+   * directly; `userTo` is only used while easing back to none. Folded into `view`, so notes, labels and overlays follow.
+   */
+  user = { x: 0, y: 0, s: 1 };
+  private userTo: { x: number; y: number; s: number } | null = null;
+  /** Called when the hand view starts or stops differing from the scene's own view (the reset button). */
+  onUserChange: ((active: boolean) => void) | null = null;
+  private userActive = false;
   private breath = { t0: 0, dur: 0, amount: 0 };
   private sparks: Spark[] = Array.from({ length: SPARKS }, () => ({ on: false, sx: 0, sy: 0, cx: 0, cy: 0, ex: 0, ey: 0, t0: 0, dur: 1, r: 2, fill: "" }));
   private spotGradient: { g: CanvasGradient; x: number; y: number; r: number } | null = null;
@@ -318,6 +337,7 @@ export class Engine {
     const changed = width !== this.width || height !== this.height;
     this.width = width;
     this.height = height;
+    if (changed) this.resetUser(true);
     if (first) {
       this.cam = { x: width / 2, y: height / 2, s: 1 };
       this.camTo = { ...this.cam };
@@ -391,6 +411,7 @@ export class Engine {
 
   /** Point the camera at a world point with zoom `s` (1.0-2.6). At zoom 1 it stays home; zoomed, it may show the night edge. */
   lookAt(x: number, y: number, s: number): void {
+    this.resetUser();
     const zoom = clamp(s, 1, 2.6);
     const slack = 1 - 1 / zoom; // how far the centre may move from home, as a share of the half size
     const w2 = this.width / 2;
@@ -617,7 +638,51 @@ export class Engine {
 
   /** Rest-angle spread for the banknotes of the scene being entered (radians): tidy columns, scattered pools. */
   setScatter(radians: number): void {
+    this.resetUser();
     if (this.notes) this.notes.scatterTo = radians;
+  }
+
+  /** Zoom the hand view by `factor` around a canvas point (CSS px), clamped to 1x-6x. */
+  zoomUser(factor: number, px: number, py: number): void {
+    const u = this.user;
+    const s = clamp(u.s * factor, 1, 6);
+    const f = s / u.s;
+    u.x = px - (px - u.x) * f;
+    u.y = py - (py - u.y) * f;
+    u.s = s;
+    this.clampUser();
+  }
+
+  panUser(dx: number, dy: number): void {
+    this.user.x += dx;
+    this.user.y += dy;
+    this.clampUser();
+  }
+
+  /** Ease the hand view back to none (snaps under reduced motion or when `snap`). */
+  resetUser(snap = false): void {
+    if (!this.userActive) return;
+    if (snap || this.reduced) {
+      this.user.x = this.user.y = 0;
+      this.user.s = 1;
+      this.userTo = null;
+      this.setUserActive(false);
+    } else this.userTo = { x: 0, y: 0, s: 1 };
+  }
+
+  /** The scaled scene view always covers the canvas, so the notes cannot be lost. */
+  private clampUser(): void {
+    const u = this.user;
+    this.userTo = null;
+    u.x = clamp(u.x, this.width * (1 - u.s), 0);
+    u.y = clamp(u.y, this.height * (1 - u.s), 0);
+    this.setUserActive(u.s > 1.001 || u.x < -0.5 || u.y < -0.5);
+  }
+
+  private setUserActive(active: boolean): void {
+    if (active === this.userActive) return;
+    this.userActive = active;
+    this.onUserChange?.(active);
   }
 
   private tick(now: number): void {
@@ -639,6 +704,27 @@ export class Engine {
     this.view.x = this.cam.x;
     this.view.y = this.cam.y;
     this.view.s = this.cam.s * (1 - breath);
+    const u = this.user;
+    const ut = this.userTo;
+    if (ut) {
+      const ku = 1 - Math.exp(-dt / 280);
+      u.x += (ut.x - u.x) * ku;
+      u.y += (ut.y - u.y) * ku;
+      u.s += (ut.s - u.s) * ku;
+      if (u.s - 1 < 0.002 && u.x > -0.3 && u.y > -0.3) {
+        u.x = u.y = 0;
+        u.s = 1;
+        this.userTo = null;
+        this.setUserActive(false);
+      }
+    }
+    if (this.userActive) {
+      // screen' = us * ((p - c) * s + W/2) + uo  ==  (p - c') * (us * s) + W/2
+      const vs = this.view.s;
+      this.view.s = vs * u.s;
+      this.view.x += ((this.width / 2) * (1 - u.s) - u.x) / this.view.s;
+      this.view.y += ((this.height / 2) * (1 - u.s) - u.y) / this.view.s;
+    }
     this.spot.a += (this.spot.aTo - this.spot.a) * (1 - Math.exp(-dt / 380));
 
     // grains

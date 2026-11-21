@@ -2346,155 +2346,119 @@
     "2025-12-23"
   ],
   "afford_example": {
-    "lowestPoint": -7681.45,
-    "lowestPointDate": "2025-10-21",
-    "roomByMonth": [
+    "yearNet": 8816.36,
+    "extraSalary": 7464,
+    "ordinarySurplus": 1352.36,
+    "monthlySurplus": 112.7,
+    "months": 12,
+    "example": {
+      "amount": 3000,
+      "tier": 2,
+      "ordinarySurplus": 1352.36,
+      "monthlySurplus": 112.7,
+      "monthsOfSurplus": 27,
+      "leftOfYearNet": 5816.36,
+      "aboveYearNet": 0
+    }
+  },
+  "savings": {
+    "habits": [
       {
-        "month": 1,
-        "room": 0
+        "merchant": "Kantine AG",
+        "group": "Food and drink",
+        "yearly": 1616.15,
+        "purchases": 121
       },
       {
-        "month": 2,
-        "room": 0
+        "merchant": "Coop Tankstelle Talgut Zentrum",
+        "group": "Transport",
+        "yearly": 764.55,
+        "purchases": 12
       },
       {
-        "month": 3,
-        "room": 0
+        "merchant": "Netflix",
+        "group": "Electronics",
+        "yearly": 250.8,
+        "purchases": 12
       },
       {
-        "month": 4,
-        "room": 0
+        "merchant": "Mobile Provider",
+        "group": "Electronics",
+        "yearly": 238.8,
+        "purchases": 12
       },
       {
-        "month": 5,
-        "room": 0
+        "merchant": "iTunes.com",
+        "group": "Electronics",
+        "yearly": 63.6,
+        "purchases": 33
       },
       {
-        "month": 6,
-        "room": 0
+        "merchant": "Digitec Galaxus",
+        "group": "Electronics",
+        "yearly": 4461.75,
+        "purchases": 18
       },
       {
-        "month": 7,
-        "room": 0
+        "merchant": "Orell Fuessli",
+        "group": "Online shopping",
+        "yearly": 1747.4,
+        "purchases": 24
       },
       {
-        "month": 8,
-        "room": 0
+        "merchant": "Paypal",
+        "group": "Online shopping",
+        "yearly": 1591.8,
+        "purchases": 17
       },
       {
-        "month": 9,
-        "room": 0
+        "merchant": "Amazon",
+        "group": "Online shopping",
+        "yearly": 1217.15,
+        "purchases": 12
       },
       {
-        "month": 10,
-        "room": 2880.26
+        "merchant": "Abercrombie & Fitch",
+        "group": "Clothing",
+        "yearly": 906.14,
+        "purchases": 21
       },
       {
-        "month": 11,
-        "room": 2880.26
-      },
-      {
-        "month": 12,
-        "room": 16497.81
+        "merchant": "Tommy Hilfiger",
+        "group": "Clothing",
+        "yearly": 810,
+        "purchases": 6
       }
     ],
-    "example": [
-      {
-        "amount": 3000,
-        "month": 1,
-        "newLowest": -10681.45,
-        "newLowestDate": "2025-10-21",
-        "belowLowestPoint": 3000,
-        "earliestOkMonth": 12
-      },
-      {
-        "amount": 3000,
-        "month": 2,
-        "newLowest": -10681.45,
-        "newLowestDate": "2025-10-21",
-        "belowLowestPoint": 3000,
-        "earliestOkMonth": 12
-      },
-      {
-        "amount": 3000,
-        "month": 3,
-        "newLowest": -10681.45,
-        "newLowestDate": "2025-10-21",
-        "belowLowestPoint": 3000,
-        "earliestOkMonth": 12
-      },
-      {
-        "amount": 3000,
-        "month": 4,
-        "newLowest": -10681.45,
-        "newLowestDate": "2025-10-21",
-        "belowLowestPoint": 3000,
-        "earliestOkMonth": 12
-      },
-      {
-        "amount": 3000,
-        "month": 5,
-        "newLowest": -10681.45,
-        "newLowestDate": "2025-10-21",
-        "belowLowestPoint": 3000,
-        "earliestOkMonth": 12
-      },
-      {
-        "amount": 3000,
-        "month": 6,
-        "newLowest": -10681.45,
-        "newLowestDate": "2025-10-21",
-        "belowLowestPoint": 3000,
-        "earliestOkMonth": 12
-      },
-      {
-        "amount": 3000,
-        "month": 7,
-        "newLowest": -10681.45,
-        "newLowestDate": "2025-10-21",
-        "belowLowestPoint": 3000,
-        "earliestOkMonth": 12
-      },
-      {
-        "amount": 3000,
-        "month": 8,
-        "newLowest": -10681.45,
-        "newLowestDate": "2025-10-21",
-        "belowLowestPoint": 3000,
-        "earliestOkMonth": 12
-      },
-      {
-        "amount": 3000,
-        "month": 9,
-        "newLowest": -10681.45,
-        "newLowestDate": "2025-10-21",
-        "belowLowestPoint": 3000,
-        "earliestOkMonth": 12
-      },
-      {
-        "amount": 3000,
-        "month": 10,
-        "newLowest": -7801.19,
-        "newLowestDate": "2025-12-21",
-        "belowLowestPoint": 119.74,
-        "earliestOkMonth": 12
-      },
-      {
-        "amount": 3000,
-        "month": 11,
-        "newLowest": -7801.19,
-        "newLowestDate": "2025-12-21",
-        "belowLowestPoint": 119.74,
-        "earliestOkMonth": 12
-      },
-      {
-        "amount": 3000,
-        "month": 12,
-        "newLowest": -7681.45,
-        "newLowestDate": "2025-10-21",
-        "belowLowestPoint": 0,
-        "earliestOkMonth": 12
-      }
-    ]
+    "excluded": [
+      "Abercrombie & Fitch",
+      "Digitec Galaxus"
+    ],
+    "example": {
+      "target": 100,
+      "cuts": [
+        {
+          "merchant": "Orell Fuessli",
+          "group": "Online shopping",
+          "fewer": 1,
+          "usualPerMonth": 2,
+          "each": 73,
+          "saves": 73
+        },
+        {
+          "merchant": "Kantine AG",
+          "group": "Food and drink",
+          "fewer": 3,
+          "usualPerMonth": 10,
+          "each": 13,
+          "saves": 40
+        }
+      ],
+      "monthly": 113,
+      "yearly": 1356,
+      "reachable": 140,
+      "shortfall": 0
+    },
+    "months": 12
   }
 }

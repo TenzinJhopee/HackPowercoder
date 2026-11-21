@@ -68,30 +68,49 @@ export function targetIn(text: string, targets: (string | number)[], current: st
 
 const CONTINUE_START = /^(continue|go on|go ahead|carry on|ok|okay|sure|got it|yes|yeah|yep|yup|resume|keep going|next|alright|all right|fine|let'?s (continue|go on|move on|keep going))\b/;
 const CONTINUE_SHORT = /\b(continue|go on|go ahead|carry on|keep going|resume|next|move on)\b/;
-const WAIT_START = /^(wait|stop|pause|hold on|hang on|one more|another question|i have a question|just a (moment|second|sec))\b/;
+/** Unmistakable "go on" words count anywhere once no question was found: "thanks, that's clear, go on". */
+const CONTINUE_ANY = /\b(continue|go on|carry on|keep going|move on|resume|proceed)\b/;
+const WAIT_START = /^(wait|stop|pause|hold on|hang on|one more|another question|(i have|i've got|quick|a quick) (a )?(quick )?question|can i ask( you)?( something| a question)?|just a (moment|second|sec|minute)|one (moment|second|sec|minute)|a (moment|second|sec))\b/;
 const WAIT_SHORT = /\b(wait|stop|pause|hold on|hang on)\b/;
-const END_START = /^(enough|end|quit|that'?s all|that'?s it|finish|i'?m done|bye|goodbye)\b/;
+const END_START = /^(enough|end|quit|that'?s all|that'?s it|finish|i'?m done|we'?re done|bye|goodbye)\b/;
+const END_ANY = /\b(that'?s all|i'?m done|we'?re done|goodbye|bye for now)\b/;
+/** Polite acknowledgements; an utterance made only of these means "go on". */
+const ACK = /^(thanks|thank you|thanks a lot|great|perfect|good|nice|cool|got it|ok|okay|alright|all right|clear|that'?s clear|understood|i see|makes sense|that makes sense|fine|that'?s fine|no that'?s fine|yes please|sounds good|right|sure)$/;
+/** Openers that carry no intent of their own: "one second, why ...", "sorry, ...", "okay so ...". */
+const LEADING_FILLER = /^((um+|uh+|erm|hmm+|hey|so|well|sorry|excuse me|one second|one sec|just a second|okay so|ok so|right so|oh)[\s,.!-]+)+/;
+
+/** The utterance without leading fillers (or unchanged if nothing else is left). */
+export function stripFiller(text: string): string {
+  const rest = text.replace(LEADING_FILLER, "").trim();
+  return rest || text;
+}
 
 /**
  * Plan 8.3: rules first. `targets` = the current scene's focus targets (categories count as a question).
+ * Leading fillers ("one second", "sorry", "um") are dropped first, so they never decide the intent alone.
  * Continue / wait / end words count when they open the utterance, or anywhere in a short one (4 words or fewer),
  * so "I'm not sure about this" stays a question.
  */
 export function classify(text: string, targets: (string | number)[] = []): Intent {
-  const t = lower(text).trim().replace(/[.!,;]+$/, "");
+  const full = lower(text).trim().replace(/[.!,;]+$/, "");
+  const t = stripFiller(full);
   const categoryIn = targets.some((x) => typeof x === "string") && targetIn(t, targets.filter((x) => typeof x === "string")) !== null;
   const isQuestion = /\?/.test(t) || monthIn(t) !== null || categoryIn || /\b(why|how|what|which|when|explain)\b/.test(t);
   if (isQuestion) return "question";
   const short = t.split(/\s+/).filter(Boolean).length <= 4;
-  if (WAIT_START.test(t) || (short && WAIT_SHORT.test(t)) || /\b(one more|another) question\b/.test(t)) return "wait";
-  if (END_START.test(t)) return "end";
-  if (CONTINUE_START.test(t) || (short && CONTINUE_SHORT.test(t))) return "continue";
+  if (WAIT_START.test(t) || (short && WAIT_SHORT.test(t)) || /\b(one more|another|a quick) question\b/.test(t)) return "wait";
+  if (t !== full && WAIT_START.test(full)) return "wait"; // "one second" alone
+  if (END_START.test(t) || END_ANY.test(t)) return "end";
+  if (CONTINUE_START.test(t) || (short && CONTINUE_SHORT.test(t)) || CONTINUE_ANY.test(t)) return "continue";
+  const parts = t.split(/\s*(?:,|\band\b|\bthen\b)\s*/).filter(Boolean);
+  if (parts.length && parts.every((p) => ACK.test(p))) return "continue";
   return "question";
 }
 
 /** Reply to a question beat: the answer whose label it is, else a yes/no style match. null = not an answer. */
 export function matchAnswer(text: string, answers: BeatAnswer[]): BeatAnswer | null {
-  const t = lower(text).trim().replace(/[.!?,;]+$/, "");
+  const t = stripFiller(lower(text).trim().replace(/[.!?,;]+$/, ""));
+  if (/\b(wait|hold on|hang on|one second|just a (second|moment))\b/.test(t)) return null;
   const exact = answers.find((a) => lower(a.label) === t || a.id === t);
   if (exact) return exact;
   const no = /^(no|nope|nah|not really|never|none|i don'?t|i do not|it wasn'?t|it was not|i haven'?t|i have not)\b/.test(t);

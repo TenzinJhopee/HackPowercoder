@@ -1,3 +1,4 @@
+import type { Keepsake } from "@/lib/savings-plan";
 import type { Beat, BeatQuestion, ConversationMode, Cue, DirectorResponse, Figure, Script, Snapshot } from "@/lib/contracts";
 
 /** What a spoken line is, for the step bar and caption colour. */
@@ -24,6 +25,8 @@ export type EngineEvent =
   | { type: "script"; kind: "main" | "side"; script: Script; source?: DirectorResponse["source"] }
   /** A main beat asked the user (show its answers as chips); null when it is answered or dropped. */
   | { type: "question"; question: BeatQuestion | null }
+  /** A prepared answer leaves something to keep (the savings slip). Emitted after its "script"; its side beats reveal it line by line. */
+  | { type: "keep"; keepsake: Keepsake }
   | { type: "error"; message: string };
 
 export type EngineListener = (event: EngineEvent) => void;

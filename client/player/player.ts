@@ -55,9 +55,10 @@ export class Player {
   }
 
   /** Invalidates every running flow and stops the voice now. */
-  cancel(): void {
+  /** `soft` fades the voice out where the voice can (interruptions). */
+  cancel(soft = false): void {
     this.run++;
-    this.voice.stop();
+    this.voice.stop(soft);
   }
 
   /** Cancels whatever runs and returns a fresh token for a new flow. */

@@ -27,6 +27,8 @@ export interface Theme {
   saved: string;
   /** Brand chrome (not used for data). */
   sun: string;
+  /** The brand yellow of the opening logo pile (not data; distinct from the spend amber). */
+  brand: string;
 }
 
 export const THEMES: Record<ThemeName, Theme> = {
@@ -39,7 +41,8 @@ export const THEMES: Record<ThemeName, Theme> = {
     spend: "#e08d12",
     coral: "#ec615c",
     saved: "#2fa36b",
-    sun: "#ffcc00"
+    sun: "#ffcc00",
+    brand: "#ffcc00"
   },
   dark: {
     canvas: "#00262e",
@@ -50,7 +53,8 @@ export const THEMES: Record<ThemeName, Theme> = {
     spend: "#f0a43a",
     coral: "#ff7a73",
     saved: "#43c48a",
-    sun: "#ffcc00"
+    sun: "#ffcc00",
+    brand: "#ffcc00"
   }
 };
 

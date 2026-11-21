@@ -74,7 +74,7 @@ test("scripts: shape, tone limits and bridges", () => {
   const mainText = MAIN.map((b) => b.say).join(" ");
   for (const month of ["June", "July", "October", "December"]) assert.ok(mainText.includes(month), month);
   assert.ok(!/sept/i.test(MAIN.map((b) => `${b.say} ${b.bridge}`).join(" ")), "main script must not mention September");
-  assert.equal(MAIN[3].bridge, "Picking up where we left off: the summer months.");
+  assert.equal(MAIN[3].bridge, "We were talking about your summer months.");
   const beats = [...MAIN, ...SIDE_ANSWERS.flatMap((a) => sideScripts(a).flat())];
   for (const beat of beats) {
     assert.ok(words(beat.say).length <= 18, `too long: ${beat.say}`);

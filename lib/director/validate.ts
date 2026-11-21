@@ -30,16 +30,20 @@ export type ValidationResult = { ok: true; script: Script; dropped: string[] } |
 
 const NUMBER_PATTERN = /\d{1,3}(?:[,'’]\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?/g;
 const MONTH_NAMES = /^\s*(january|february|march|april|may|june|july|august|september|october|november|december)\b/i;
+const MONTH_BEFORE = /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+$/i;
 const ORDINAL = /^(st|nd|rd|th)\b/i;
 
-/** Numbers in a text with thousands separators (, ') removed. Day-of-month and ordinals are skipped. */
+/** Numbers in a text with thousands separators (, ') removed. Day-of-month ("18 September", "September 18") and ordinals are skipped. */
 export function extractNumbers(text: string): number[] {
   const found: number[] = [];
   for (const match of text.matchAll(NUMBER_PATTERN)) {
     const value = Number(match[0].replace(/[,'’]/g, ""));
     if (!Number.isFinite(value)) continue;
-    const rest = text.slice((match.index ?? 0) + match[0].length);
-    const isDay = Number.isInteger(value) && value >= 1 && value <= 31 && !match[0].includes(",") && (MONTH_NAMES.test(rest) || ORDINAL.test(rest));
+    const start = match.index ?? 0;
+    const rest = text.slice(start + match[0].length);
+    const before = text.slice(0, start);
+    const isDay =
+      Number.isInteger(value) && value >= 1 && value <= 31 && !match[0].includes(",") && (MONTH_NAMES.test(rest) || ORDINAL.test(rest) || MONTH_BEFORE.test(before));
     if (!isDay) found.push(value);
   }
   return found;

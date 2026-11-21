@@ -1,8 +1,9 @@
-import { replayPurchase, roomBeforeLowest } from "@/lib/afford";
+import { measureAgainstSurplus, type AffordMeasure } from "@/lib/afford";
 import { cardBudgetMonthly, cardCycles, cardPayments } from "@/lib/card-cycle";
 import { getBalanceSeries } from "@/lib/intelligence";
 import { groupLabels, necessities, necessityLabels, ruleTags, type MerchantTag } from "@/lib/merchant-tags";
 import type { Transaction } from "@/lib/models";
+import { savingsPlan, type Habit, type SavingsPlan } from "@/lib/savings-plan";
 import { getSpendingProfile, type SpendingProfile } from "@/lib/profile";
 
 /**
@@ -49,19 +50,26 @@ export interface FactsSummary {
   /** Salary minus fixed costs; an upper bound, since spending paid from other accounts is not in the data (see accounts_complete). */
   monthlyRoomAfterCompulsory: number;
   /**
-   * "Can I afford it?": a replay of last year's private-account balance with one extra card purchase, not a forecast.
-   * roomByMonth = largest purchase in that month that would not have gone below the year's lowest point.
+   * "Can I afford it?": the amount compared with what the private account kept last year (an upper bound while
+   * accounts_complete is unanswered). ordinarySurplus = yearNet without the extra salary; example = the fixed 3,000 case.
    */
-  affordReplay: {
-    lowestPoint: number;
-    lowestPointDate: string;
-    roomByMonth: { month: number; room: number }[];
-    example: { amount: number; month: number; newLowest: number; newLowestDate: string; belowLowestPoint: number; earliestOkMonth: number | null }[];
+  affordability: {
+    yearNet: number;
+    extraSalary: number;
+    ordinarySurplus: number;
+    monthlySurplus: number;
+    months: number;
+    example: AffordMeasure;
   } | null;
   levers: {
     adjustable: { merchant: string; yearly: number }[];
     flexibleHabits: { merchant: string; yearly: number; purchases: number }[];
   };
+  /**
+   * "How can I save X a month?": the repeated habits a cut can come from (refund-heavy and stopped ones left out),
+   * and the plan for the fixed 100 franc example. `each` in a cut is the average price of one purchase.
+   */
+  savings: { habits: Habit[]; excluded: string[]; example: SavingsPlan };
   /** The one option the advisor may offer; confirmed by touch only. */
   offer: { product: string; monthly: number; after_one_year: number };
   insights: Insight[];
@@ -70,8 +78,11 @@ export interface FactsSummary {
   assumptions: string[];
 }
 
-/** The fixed "Can I afford a 3,000 franc laptop?" example, precomputed for every purchase month. */
+/** The fixed "Can I afford a 3,000 franc laptop?" example, precomputed. */
 export const AFFORD_EXAMPLE_AMOUNT = 3000;
+
+/** The fixed "How can I save 100 francs a month?" example. */
+export const SAVINGS_EXAMPLE_TARGET = 100;
 
 /** Swiss pillar 3a maximum for employees with a pension fund, 2025. */
 export const PILLAR_3A_LIMIT_2025 = 7258;
@@ -123,7 +134,7 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
   const profile = getSpendingProfile(profileTransactions, currency, tags);
   const periodStart = profile.periodStart;
   const periodEnd = profile.periodEnd;
-  let affordReplay: FactsSummary["affordReplay"] = null;
+  let affordability: FactsSummary["affordability"] = null;
 
   // 1. Year-end result and how much of it is the extra (13th) salary.
   if (privateAccount) {
@@ -138,6 +149,12 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
       evidence: selected.filter((t) => t.type === "income").map((t) => t.id)
     });
 
+    // 1b. "Can I afford it?" numbers for the director: the amount against what was kept last year.
+    const months = (Number(periodEnd.slice(0, 4)) - Number(periodStart.slice(0, 4))) * 12 + Number(periodEnd.slice(5, 7)) - Number(periodStart.slice(5, 7)) + 1;
+    const surplus = { yearNet, extraSalary: extra, months };
+    const example = measureAgainstSurplus(AFFORD_EXAMPLE_AMOUNT, surplus);
+    affordability = { yearNet, extraSalary: extra, ordinarySurplus: example.ordinarySurplus, monthlySurplus: example.monthlySurplus, months, example };
+
     // 2. Lowest point of the private account, relative to the start of the year.
     const balance = getBalanceSeries(selected, currency, 0, privateAccount);
     if (balance.lowestMonthEnd && balance.lowestDay && balance.lowestDay.balance < 0) {
@@ -149,20 +166,6 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
         figures: { lowestMonthEnd: balance.lowestMonthEnd.balance, lowestMonthEndMonth: balance.lowestMonthEnd.date.slice(0, 7), lowestDay: balance.lowestDay.balance, lowestDayDate: balance.lowestDay.date },
         evidence: []
       });
-    }
-
-    // 2b. "Can I afford it?" numbers for the director: a replay of last year, not a forecast.
-    if (balance.lowestDay) {
-      const paymentDates = cardPayments(selected).map((p) => p.date);
-      affordReplay = {
-        lowestPoint: balance.lowestDay.balance,
-        lowestPointDate: balance.lowestDay.date,
-        roomByMonth: roomBeforeLowest(balance.daily, paymentDates),
-        example: Array.from({ length: 12 }, (_, i) => {
-          const r = replayPurchase(balance.daily, AFFORD_EXAMPLE_AMOUNT, i + 1, paymentDates);
-          return { amount: r.amount, month: r.month, newLowest: r.newLowest.balance, newLowestDate: r.newLowest.date, belowLowestPoint: r.belowActualLowest, earliestOkMonth: r.earliestOkMonth };
-        })
-      };
     }
   }
 
@@ -383,11 +386,12 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
     })),
     topGroups: profile.groups.slice(0, 8).map((g) => ({ group: g.group, label: groupLabels[g.group], net: g.net, necessity: g.necessity })),
     monthlyRoomAfterCompulsory: profile.monthlyRoomAfterCompulsory,
-    affordReplay,
+    affordability,
     levers: {
       adjustable: profile.levers.adjustable.map((m) => ({ merchant: m.merchant, yearly: m.net })),
       flexibleHabits: profile.levers.flexibleHabits.map((m) => ({ merchant: m.merchant, yearly: m.net, purchases: m.count }))
     },
+    savings: savingsOf(profile, insights),
     offer: { ...OFFER },
     insights,
     openQuestions: insights.filter((i) => i.mode === "ask").map((i) => ({ subject: i.id, question: i.question!, answers: i.answers! })),
@@ -400,10 +404,17 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
         : [
             "These two accounts may not be all of her spending (no groceries or cash withdrawals): monthlyRoomAfterCompulsory is an upper bound before any spending paid another way; say 'at most', never present it as free money."
           ]),
-      "affordReplay replays last year's balance with one extra purchase; it is not a forecast. Describe consequences only, never say whether to buy.",
+      "affordability compares an amount with what was kept last year; it is not a forecast. Describe consequences only, never say whether to buy.",
       "Insights in mode 'ask' must be asked, never stated as fact; 'resolved' ones use the user's answer."
     ]
   };
+}
+
+/** Habits a monthly saving can come from, and the plan for the fixed example. */
+function savingsOf(profile: SpendingProfile, insights: Insight[]): FactsSummary["savings"] {
+  const habits: Habit[] = [...profile.levers.adjustable, ...profile.levers.flexibleHabits].map((m) => ({ merchant: m.merchant, group: m.group, yearly: m.net, purchases: m.count }));
+  const excluded = insights.filter((i) => i.id.startsWith("refund_heavy:") || i.id.startsWith("habit_stopped:")).map((i) => String(i.figures.merchant));
+  return { habits, excluded, example: savingsPlan(SAVINGS_EXAMPLE_TARGET, habits, profile.months, excluded) };
 }
 
 /** The second of two identical charges; removed from the profile when the user confirms a duplicate. */

@@ -39,7 +39,7 @@ test("completeness and tax are asked, then resolved by a note", () => {
   assert.equal(tax?.mode, "ask");
   assert.deepEqual([tax?.figures.taxPayments, tax?.figures.taxPaid, tax?.figures.yearlyIncome], [3, 630, 97032]);
   assert.ok(facts.assumptions.some((a) => a.includes("upper bound")));
-  assert.equal(facts.affordReplay?.example[5].belowLowestPoint, 3000);
+  assert.deepEqual([facts.affordability?.ordinarySurplus, facts.affordability?.example.tier, facts.affordability?.example.leftOfYearNet], [1352.36, 2, 5816.36]);
   const answered = buildFacts(transactions, "CHF", undefined, [
     { subject: "accounts_complete", answer: "complete", text: "No, this is everything", createdAt: "2025-12-31" },
     { subject: "tax_provision", answer: "not_yet", text: "No, not yet", createdAt: "2025-12-31" }

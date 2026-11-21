@@ -14,6 +14,7 @@ import { GrainWorld } from "@/client/world/grain-world";
 import { applySkin } from "@/client/world/skin";
 import { THEME_EVENT, currentTheme, type ThemeName } from "./theme";
 import type { CaptionLine, LogEntry } from "./transcript";
+import { keepReducer, type KeptSlip } from "./keepsake";
 import type { PlayingScript } from "./script-panel";
 import type { FigureChange } from "./stage";
 
@@ -39,6 +40,8 @@ type State = {
   offer: Beat | null;
   offerConfirmed: boolean;
   question: BeatQuestion | null;
+  /** The savings slip: stays until the user closes it or starts over. */
+  slip: KeptSlip | null;
   error: string | null;
 };
 
@@ -56,10 +59,11 @@ const initialState: State = {
   offer: null,
   offerConfirmed: false,
   question: null,
+  slip: null,
   error: null
 };
 
-type Action = { type: "engine"; event: EngineEvent } | { type: "confirmed" } | { type: "reset" } | { type: "user"; text: string };
+type Action = { type: "engine"; event: EngineEvent } | { type: "confirmed" } | { type: "closeSlip" } | { type: "reset" } | { type: "user"; text: string };
 
 /** Moves the line being spoken into the log (interrupted lines keep how far they got). */
 function archived(state: State): Pick<State, "log" | "seq" | "line" | "lineKind"> {
@@ -76,7 +80,10 @@ function reducer(state: State, action: Action): State {
     return { ...state, ...done, log: [...done.log, { id: done.seq, role: "user", text: action.text }], seq: done.seq + 1 };
   }
   if (action.type === "confirmed") return { ...state, offerConfirmed: true };
+  if (action.type === "closeSlip") return { ...state, slip: null };
   const event = action.event;
+  const slip = keepReducer(state.slip, event);
+  if (slip !== state.slip) state = { ...state, slip };
   switch (event.type) {
     case "line": {
       const step = event.beatIndex !== null && event.beatCount !== null ? { index: event.beatIndex, count: event.beatCount } : null;
@@ -170,7 +177,8 @@ export function useAdvisor() {
     dispatch({ type: "reset" });
     void engine.current?.start();
   }, [world]);
-  const interrupt = useCallback(() => engine.current?.interrupt(), []);
+  /** `invite`: the Stop button (never the mic) may say a short "Yes?". */
+  const interrupt = useCallback((invite?: boolean) => engine.current?.interrupt(invite === true), []);
   /** Any typed, spoken or chip text; the engine classifies it (continue / wait / end / question). */
   const say = useCallback((text: string) => {
     dispatch({ type: "user", text });
@@ -191,6 +199,7 @@ export function useAdvisor() {
     engine.current?.confirmOffer(OFFER_JAR, OFFER_FIGURE);
     dispatch({ type: "confirmed" });
   }, []);
+  const closeSlip = useCallback(() => dispatch({ type: "closeSlip" }), []);
   const setSound = useCallback((on: boolean) => {
     setSoundState(on);
     voice.current?.setMuted(!on);
@@ -209,6 +218,7 @@ export function useAdvisor() {
     offer: state.offer,
     offerConfirmed: state.offerConfirmed,
     question: state.question,
+    slip: state.slip,
     error: state.error,
     world,
     sound,
@@ -219,6 +229,7 @@ export function useAdvisor() {
     resume,
     answer,
     confirmOffer,
+    closeSlip,
     setSound
   };
 }

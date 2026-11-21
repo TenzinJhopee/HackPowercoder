@@ -1,4 +1,4 @@
-import { BACKUP_NO_ANSWER_LINE, OFFER_CONFIRMED_LINE } from "@/content/scripts";
+import { BACKUP_NO_ANSWER_LINE, CLOSING_LINES, INVITE_LINES, OFFER_CONFIRMED_LINE, REENTRY_LINES } from "@/content/scripts";
 import {
   DEFAULT_BRIDGE,
   DIRECTOR_FAILURE_LINE,
@@ -13,13 +13,21 @@ import {
   type Snapshot,
   type World,
 } from "@/lib/contracts";
+import type { Keepsake } from "@/lib/savings-plan";
 import { Emitter, type EngineListener } from "../events";
 import { Player } from "../player/player";
 import { isBackupMode, type Speaker } from "../player/voice";
 import { classify, matchAnswer, targetIn } from "./intent";
 
 /** `script` may be built from the question (e.g. the amount in "Can I afford ...?"); no network either way. */
-export type PreparedAnswer = { match: (question: string) => boolean; script: Script | ((question: string) => Script) };
+export type PreparedAnswer = {
+  match: (question: string) => boolean;
+  script: Script | ((question: string) => Script);
+  /** Something that stays on screen after the answer (emitted as a "keep" event). */
+  keep?: (question: string) => Keepsake | null;
+  /** Short reactions spoken before the answer, rotated. */
+  lead?: readonly string[];
+};
 
 export type ConversationOptions = {
   world: World;
@@ -72,6 +80,8 @@ export class Conversation {
   private confirmPending = false;
   /** Next filler line; rotates so consecutive questions sound different. */
   private fillerIndex = 0;
+  /** Rotation position per fixed line list (lead-ins, closings, re-entries, invitations). */
+  private readonly turns = new Map<readonly string[], number>();
 
   constructor(options: ConversationOptions) {
     this.world = options.world;
@@ -115,12 +125,23 @@ export class Conversation {
     return this.playMain(index + 1);
   }
 
-  /** Stop button / mic pressed / "wait": stop now and listen. */
-  interrupt(): void {
+  /**
+   * Stop button / mic pressed / "wait": fade the voice out and listen. `invite` (the Stop button only, never the mic)
+   * adds a very short "Yes?". In `listening` it just silences that invitation, so nothing talks over the mic.
+   */
+  interrupt(invite = false): void {
+    if (this.mode === "listening") {
+      this.player.cancel();
+      return;
+    }
     if (this.mode === "presenting" || this.mode === "returning") this.setSnapshot(this.takeSnapshot());
     if (this.mode === "presenting" || this.mode === "returning" || this.mode === "side") {
-      this.cancel();
+      this.cancel(true);
       this.setMode("listening");
+      if (invite) {
+        const my = this.player.begin();
+        void this.player.speak(this.pick(INVITE_LINES), my, "filler");
+      }
     }
   }
 
@@ -160,8 +181,12 @@ export class Conversation {
     const preparedScript = prepared && (typeof prepared.script === "function" ? prepared.script(question) : prepared.script);
     if (preparedScript) {
       this.events.emit({ type: "script", kind: "side", script: preparedScript, source: "prepared" });
+      const keepsake = prepared?.keep?.(question);
+      if (keepsake) this.events.emit({ type: "keep", keepsake });
+      // A person reacts first: a short lead-in that names the topic, while the zoom above already runs.
+      if (prepared?.lead?.length && !(await this.player.speak(this.pick(prepared.lead), my, "filler"))) return;
       if (!(await this.playSide(preparedScript, my))) return;
-      return this.finishSide(my);
+      return this.finishSide(my, preparedScript);
     }
 
     if (this.backup) {
@@ -181,7 +206,7 @@ export class Conversation {
     }
     this.events.emit({ type: "script", kind: "side", script: response.script, source: response.source });
     if (!(await this.playSide(response.script, my))) return;
-    this.finishSide(my);
+    return this.finishSide(my, response.script);
   }
 
   /** "OK, let's continue": restore the snapshot, speak the bridge, replay the interrupted beat. */
@@ -202,9 +227,14 @@ export class Conversation {
     this.mainIndex = s.mainIndex;
     this.setMode("returning");
     this.restore(s);
-    const bridge = this.main[s.mainIndex]?.bridge ?? DEFAULT_BRIDGE;
-    if (!(await this.player.speak(bridge, my, "bridge"))) return;
-    return this.playMain(s.mainIndex, my);
+    // Re-entry, then the beat's bridge as a short recap, then on with the presentation.
+    if (!(await this.player.speak(this.pick(REENTRY_LINES), my, "bridge"))) return;
+    const beat = this.main[s.mainIndex];
+    if (!(await this.player.speak(beat?.bridge ?? DEFAULT_BRIDGE, my, "bridge"))) return;
+    // Heard nearly to its end: go on with the next beat instead of repeating it (question and offer beats replay).
+    const words = beat ? beat.say.split(/\s+/).filter(Boolean).length : 0;
+    const heard = beat && !beat.question && !beat.offer && words > 0 && s.wordsSpoken >= words - 2;
+    return this.playMain(heard ? s.mainIndex + 1 : s.mainIndex, my);
   }
 
   /** "That's all": stop everything. */
@@ -279,9 +309,21 @@ export class Conversation {
     return true;
   }
 
-  private async finishSide(my: number): Promise<void> {
+  /** Ends a side answer: hands the choice back out loud (unless it ended asking, or with the offer), then waits. */
+  private async finishSide(my: number, script?: Script): Promise<void> {
     if (!(await this.sayConfirmed(my))) return;
+    const last = script ? [...script].reverse().find((b) => !(b.offer && this.skipOffer)) : undefined;
+    const handedBack = !!last && (last.offer || /\?\s*$/.test(last.say));
+    const nothingLeft = !this.snapshot && this.asking === null && this.mainDone;
+    if (!handedBack && !nothingLeft && !(await this.player.speak(this.pick(CLOSING_LINES), my, "bridge"))) return;
     this.setMode("waiting");
+  }
+
+  /** Next line of a rotating list, so the same one is not heard twice in a row. */
+  private pick(lines: readonly string[]): string {
+    const i = this.turns.get(lines) ?? 0;
+    this.turns.set(lines, i + 1);
+    return lines[i % lines.length];
   }
 
   private setAsking(index: number | null): void {
@@ -311,8 +353,8 @@ export class Conversation {
     }
   }
 
-  private cancel(): void {
-    this.player.cancel();
+  private cancel(soft = false): void {
+    this.player.cancel(soft);
     this.directorAbort?.abort();
     this.directorAbort = null;
   }
@@ -325,7 +367,8 @@ export class Conversation {
       figure: this.player.figure ?? { label: "", value: 0 },
       mainIndex: this.mainIndex,
       sentence: beat?.say ?? "",
-      wordsSpoken: this.player.wordsSpoken,
+      // Only counts when the beat itself was playing (not a re-entry or bridge line).
+      wordsSpoken: this.mode === "presenting" && this.player.lastLine === beat?.say ? this.player.wordsSpoken : 0,
     };
   }
 

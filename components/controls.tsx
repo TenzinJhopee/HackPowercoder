@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { BeatQuestion, ConversationMode } from "@/lib/contracts";
-import { AFFORD_EXAMPLE } from "@/content/scripts";
+import { AFFORD_EXAMPLE, SAVE_EXAMPLE } from "@/content/scripts";
 import { STARTER_QUESTIONS } from "./welcome";
 import { Logo } from "./logo";
 import { ThemeToggle } from "./theme-toggle";
@@ -143,7 +143,7 @@ export function Chips({ mode, canContinue, question, onStart, onSay, onResume, o
   const chips: Record<ConversationMode, Chip[]> = {
     idle: [action("Start the presentation", onStart, true)],
     presenting: [ask("Wait, why is September so high?"), ask("Wait, how can I save money?"), ask("Wait, what am I looking at?")],
-    listening: [ask("Why is September so high?"), ask("Why was November high?"), ask("How can I save money?"), ask("What are my spending habits?"), ask(AFFORD_EXAMPLE), ...(canContinue ? [cont] : [])],
+    listening: [ask("Why is September so high?"), ask("Why was November high?"), ask(SAVE_EXAMPLE), ask("What are my spending habits?"), ask(AFFORD_EXAMPLE), ...(canContinue ? [cont] : [])],
     side: canContinue ? [cont] : [],
     waiting: canContinue ? [cont, action("One more question", onMore)] : [...more, walk],
     answering: (question?.answers ?? []).map((a, i) => action(a.label, () => onAnswer?.(a.id), i === 0)),

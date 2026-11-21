@@ -1,6 +1,7 @@
 import type { Breakdown } from "@/lib/contracts";
 import { swiss } from "@/components/format";
 import { theme } from "@/components/theme";
+import { FOCUS_SOFTEN } from "../choreo";
 import { clamp, noise, palette, type Box, type Grain, type RGB, type Timing } from "../engine";
 import { assignColumns, clusterRadius, columnGrid, packClusters, phyllotaxis, pick, type ColumnGrid } from "../layout";
 import { orderParts, partsFromCategories, segment, type Segment, type SegmentSource } from "../segments";
@@ -31,6 +32,12 @@ export class MonthlyScene extends Scene {
   private shownSplit: number | null = null;
   private split: Split | null = null;
   private splitAt = 0;
+  /** Columns beside a split column ease aside to give its legend a clear lane: world x offset per column (from → to). */
+  private shiftFrom = new Float64Array(12);
+  private shiftTo = new Float64Array(12);
+  private shiftAt = 0;
+  /** Legend row baselines (screen px), reused every frame. */
+  private rowY = new Float64Array(16);
 
   private get counts() {
     return this.env.facts.monthly_spending_jan_dec.map((v) => Math.max(0, Math.round(v / 100)));
@@ -134,6 +141,8 @@ export class MonthlyScene extends Scene {
     const splitting = kind === "update" && splitMonth !== null && wasSplit !== splitMonth && closing !== splitMonth;
     const unsplit = kind === "update" && wasSplit !== null && wasSplit !== splitMonth && opened?.month !== wasSplit ? wasSplit : null;
     if (splitting || (split && closing === splitMonth) || (split && this.splitAt === 0)) this.splitAt = performance.now();
+    const lane = split ? this.legendLane(grid, split) : null;
+    this.setShift(split && lane ? split.month : null, lane?.shift ?? 0);
     const colFocus = opened?.month ?? splitMonth;
     const focusPart = typeof this.focusKey === "string" ? this.focusKey : null;
     const r = grid.pitch * 0.38;
@@ -149,6 +158,7 @@ export class MonthlyScene extends Scene {
       let inPart = 0;
       column.forEach((g, k) => {
         let pos = grid.slot(i, k, 1, g);
+        if (this.shiftTo[i]) pos = { x: pos.x + this.shiftTo[i], y: pos.y };
         let grainLook = look;
         let color: RGB = palette.spend;
         let gr = r;
@@ -212,15 +222,82 @@ export class MonthlyScene extends Scene {
     } else if (split) {
       const m = split.month;
       const col = { x: grid.colX(m - 1) - 2 * grid.pitch, y: split.top, w: 4 * grid.pitch, h: grid.baseY - split.top };
-      // Room for the legend on the open side (left for July-December, like the breakdown).
-      const legend = grid.colW * 2.4;
-      let box = { x: col.x - grid.colW * 0.5 - (m >= 7 ? legend : 0), y: col.y - 16, w: col.w + grid.colW + legend, h: col.h + 34 };
-      if (this.ghosts.has(m)) box = union(box, this.ghostBox(grid, m));
+      const box = this.splitBox(grid, split, lane!.w);
       const seg = focusPart ? split.segs.find((sg) => sg.name === focusPart) : null;
-      this.focusCamera(box, { min: 1.15, max: 2.6, pad: 0.1 }, seg?.color ?? palette.spend, true, seg?.box ?? col);
+      this.focusCamera(box, { min: this.splitMin(box), max: 2.6, pad: 0.1 }, seg?.color ?? palette.spend, true, seg?.box ?? col);
     } else {
       e.home();
     }
+  }
+
+  /** Camera box for a split column with a legend lane `legend` wide (world) on its open side (left for July-December). */
+  private splitBox(grid: ColumnGrid, split: Split, legend: number): Box {
+    const m = split.month;
+    const x = grid.colX(m - 1);
+    const half = 2 * grid.pitch;
+    const side = Math.max(grid.colW * 0.5, legend + grid.pitch * 0.4);
+    const far = grid.colW * 0.5;
+    const left = m >= 7;
+    let box = { x: x - half - (left ? side : far), y: split.top - 16, w: 2 * half + side + far, h: grid.baseY - split.top + 34 };
+    if (this.ghosts.has(m)) box = union(box, this.ghostBox(grid, m));
+    return box;
+  }
+
+  /**
+   * The legend's lane beside a split column: its width in world units at the zoom the camera settles at (the user's
+   * hand zoom only zooms in, so the lane never gets tighter), and how far the columns on that side ease aside to clear it.
+   */
+  private legendLane(grid: ColumnGrid, split: Split) {
+    const e = this.engine;
+    let chars = 5;
+    for (const sg of split.segs) if (sg.count > 0) chars = Math.max(chars, sg.name.length, swiss(sg.value).length);
+    // Dot, gaps and text (11px Inter, about 6.4px a character), plus a clear margin before the next notes.
+    const px = 16 + chars * 6.4 + 12;
+    const reach = grid.pitch * 0.7; // from the column's edge to the dot
+    const soften = FOCUS_SOFTEN[this.focusStyle];
+    let w = grid.colW * 2.4;
+    let s = 1;
+    for (let it = 0; it < 3; it++) {
+      const box = this.splitBox(grid, split, w);
+      const fit = Math.min((e.width * 0.9) / Math.max(box.w, 1), (e.height * 0.9) / Math.max(box.h, 1));
+      // frame() clamps to 1.15-2.6, the focus style softens it, a camera breath pulls back up to 7%.
+      s = (1 + (clamp(fit, this.splitMin(box), 2.6) - 1) * soften) * 0.93;
+      w = reach + px / s;
+    }
+    // The next column's notes reach about 2 pitches out from its centre.
+    const shift = Math.max(0, 2 * grid.pitch + w + 2 * grid.pitch - grid.colW);
+    return { w, shift };
+  }
+
+  /** Least zoom for a split column: 1.15, or less when the column with its total would not fit the stage's height. */
+  private splitMin(box: Box) {
+    const fitH = (this.engine.height * 0.9) / Math.max(box.h, 1);
+    if (fitH >= 1.15) return 1.15;
+    // The focus style softens the zoom towards 1 (1 + (z - 1) * soften), so below 1 aim lower to still land at fitH.
+    return fitH >= 1 ? fitH : 1 + (fitH - 1) / FOCUS_SOFTEN[this.focusStyle];
+  }
+
+  /** Ease the columns on the legend side of `month` aside by `shift` (or all back home for null). */
+  private setShift(month: number | null, shift: number) {
+    const now = performance.now();
+    let changed = false;
+    for (let i = 0; i < 12; i++) {
+      const to = month === null ? 0 : month >= 7 ? (i < month - 1 ? -shift : 0) : i > month - 1 ? shift : 0;
+      if (Math.abs(to - this.shiftTo[i]) > 0.01) changed = true;
+    }
+    if (!changed) return;
+    for (let i = 0; i < 12; i++) {
+      this.shiftFrom[i] = this.shiftShown(i, now);
+      this.shiftTo[i] = month === null ? 0 : month >= 7 ? (i < month - 1 ? -shift : 0) : i > month - 1 ? shift : 0;
+    }
+    this.shiftAt = now;
+  }
+
+  /** Current offset of column i, eased like the grains' own calm update flight. */
+  private shiftShown(i: number, now: number) {
+    const t = clamp((now - this.shiftAt - 140) / 1200, 0, 1);
+    const k = 0.5 - 0.5 * Math.cos(Math.PI * t);
+    return this.shiftFrom[i] + (this.shiftTo[i] - this.shiftFrom[i]) * k;
   }
 
   /** Segment slots for a focused column: each part starts on a fresh row, a small gap between parts. */
@@ -337,7 +414,7 @@ export class MonthlyScene extends Scene {
       const faded = focusMonth && !hit ? 0.45 : 1;
       const name = short ? MONTHS[i][0] : MONTHS[i].slice(0, 3);
       const a = this.labelAt(now, i, 12);
-      e.label(ctx, name, grid.colX(i), grid.baseY, { color: hit ? theme.paper : theme.faint, alpha: a * faded, dy: 13, weight: hit ? 600 : 400 });
+      e.label(ctx, name, grid.colX(i) + this.shiftShown(i, now), grid.baseY, { color: hit ? theme.paper : theme.faint, alpha: a * faded, dy: 13, weight: hit ? 600 : 400 });
     }
     if (split) {
       e.label(ctx, swiss(spending[split.month - 1]), grid.colX(split.month - 1), split.top, { color: theme.paper, alpha: this.changeAlpha(now, -500), dy: -6, weight: 600 });
@@ -368,19 +445,47 @@ export class MonthlyScene extends Scene {
     const dotX = edge + (left ? -8 : 8);
     const textX = dotX + (left ? -8 : 8);
     const settle = e.reduced ? 300 : 650;
+    const [segEdge] = e.toScreen(grid.colX(split.month - 1) + (left ? -1 : 1) * 2.1 * grid.pitch, 0);
+    // Rows sit at their segment's middle; close segments push rows apart (upwards, like the segments stack), and a
+    // second pass keeps the top row inside the stage. Rows are 25px tall (name + amount).
+    const rows = this.rowY;
+    const n = Math.min(split.segs.length, rows.length);
     let lastY = Infinity;
-    for (let s = 0; s < split.segs.length; s++) {
+    for (let s = 0; s < n; s++) {
+      const sg = split.segs[s];
+      if (sg.count === 0) continue;
+      const [, mid] = e.toScreen(0, sg.box.y + sg.box.h / 2);
+      rows[s] = Math.min(mid + 4, lastY - 25);
+      lastY = rows[s];
+    }
+    let floor = 16;
+    for (let s = n - 1; s >= 0; s--) {
+      if (split.segs[s].count === 0) continue;
+      rows[s] = Math.max(rows[s], floor);
+      floor = rows[s] + 25;
+    }
+    for (let s = 0; s < n; s++) {
       const sg = split.segs[s];
       if (sg.count === 0) continue;
       const a = clamp((now - this.splitAt - settle - 170 * s) / 420, 0, 1) * this.labelAlpha(now);
-      const [, mid] = e.toScreen(0, sg.box.y + sg.box.h / 2);
-      const y = Math.min(mid + 4, lastY - 25); // keep labels apart, stacking upwards like the segments
-      lastY = y;
+      const y = rows[s];
       if (a < 0.01) continue;
+      const [, mid] = e.toScreen(0, sg.box.y + sg.box.h / 2);
       const hit = sg.name === focusPart;
       const dim = focusPart && !hit ? 0.45 : 1;
+      const fill = `rgb(${sg.color[0]},${sg.color[1]},${sg.color[2]})`;
+      if (Math.abs(y - 4 - mid) > 3) {
+        // Leader from the segment to its displaced row.
+        ctx.globalAlpha = a * dim * 0.55;
+        ctx.strokeStyle = fill;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(segEdge, mid);
+        ctx.lineTo(dotX + (left ? 5 : -5), y - 4);
+        ctx.stroke();
+      }
       ctx.globalAlpha = a * dim;
-      ctx.fillStyle = `rgb(${sg.color[0]},${sg.color[1]},${sg.color[2]})`;
+      ctx.fillStyle = fill;
       ctx.beginPath();
       ctx.arc(dotX, y - 4, 3.5, 0, Math.PI * 2);
       ctx.fill();

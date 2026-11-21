@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Chips, InputRow, ProgressPill, StatusBar, useInputFocus } from "./controls";
 import { OfferCard } from "./offer-card";
+import { SavingsSlip } from "./savings-slip";
 import { ScriptPanel } from "./script-panel";
 import { Stage } from "./stage";
 import { Transcript } from "./transcript";
@@ -53,6 +54,11 @@ export function AdvisorShell() {
             ) : (
               <>
                 <Transcript log={advisor.log} line={advisor.line} lineKind={advisor.lineKind} />
+                {advisor.slip && (
+                  <div className="md:max-h-56 md:shrink-0 md:overflow-y-auto">
+                    <SavingsSlip slip={advisor.slip} onClose={advisor.closeSlip} />
+                  </div>
+                )}
                 {advisor.offer && <OfferCard confirmed={advisor.offerConfirmed} onConfirm={advisor.confirmOffer} />}
                 <Chips
                   mode={advisor.mode}
@@ -76,7 +82,7 @@ export function AdvisorShell() {
               text={input.text}
               onText={input.setText}
               onSubmit={advisor.say}
-              onStop={advisor.interrupt}
+              onStop={() => advisor.interrupt(true)}
               onMicDown={() => {
                 advisor.interrupt();
                 mic.start();

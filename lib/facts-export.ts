@@ -52,8 +52,10 @@ export interface FactsExport {
   /** Private-account balance at the end of each day with activity, relative to 1 January: [date, balance]. For lib/afford.ts. */
   private_balance_daily: [string, number][];
   card_payment_dates: string[];
-  /** The fixed "Can I afford a 3,000 franc laptop?" example per purchase month (replay of last year, not a forecast). */
-  afford_example: FactsSummary["affordReplay"];
+  /** What was kept last year and the fixed "Can I afford a 3,000 franc laptop?" example against it (not a forecast). */
+  afford_example: FactsSummary["affordability"];
+  /** Habits a monthly saving can come from and the fixed 100 franc plan (lib/savings-plan.ts). */
+  savings: FactsSummary["savings"] & { months: number };
 }
 
 const round = (value: number) => Math.round(value);
@@ -291,6 +293,7 @@ export function buildFactsExport(transactions: Transaction[], currency = "CHF", 
     profile: { byNecessity: facts.byNecessity, monthlyRoomAfterCompulsory: facts.monthlyRoomAfterCompulsory, levers: facts.levers },
     private_balance_daily: getBalanceSeries(selected, currency, 0, privateAccount).daily.map((p) => [p.date, p.balance]),
     card_payment_dates: cardPayments(selected).map((p) => p.date),
-    afford_example: facts.affordReplay
+    afford_example: facts.affordability,
+    savings: { ...facts.savings, months: new Set(selected.map((t) => t.date.slice(0, 7))).size }
   };
 }

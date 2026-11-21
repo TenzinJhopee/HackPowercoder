@@ -1,11 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { AFFORD_EXAMPLE } from "@/content/scripts";
+import { AFFORD_EXAMPLE, SAVE_EXAMPLE } from "@/content/scripts";
 
 /** What she can ask the advisor; each is answered from her own bookings. Shared with the follow-up chips. */
 export const STARTER_QUESTIONS = [
-  { text: "How can I save money?", hint: "Where to cut, honestly", icon: "save" },
+  { text: SAVE_EXAMPLE, hint: "A plan you can keep, step by step", icon: "save" },
   { text: "What are my spending habits?", hint: "The patterns in your year", icon: "habits" },
   { text: "Why is September so high?", hint: "The tallest month, opened up", icon: "month" },
   { text: AFFORD_EXAMPLE, hint: "Replays last year with it", icon: "buy" }

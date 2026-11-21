@@ -87,12 +87,21 @@ export async function speakWithElevenLabs(
   fetcher: typeof fetch = fetch,
   modelId: string = DEFAULT_MODEL_ID
 ): Promise<SpeechResult> {
-  const response = await fetcher(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps?output_format=mp3_44100_128`, {
-    method: "POST",
-    headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ text, model_id: modelId, voice_settings: voiceSettings() }),
-    signal: AbortSignal.timeout(45_000)
-  });
+  let response: Response;
+  try {
+    response = await fetcher(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps?output_format=mp3_44100_128`, {
+      method: "POST",
+      headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ text, model_id: modelId, voice_settings: voiceSettings() }),
+      signal: AbortSignal.timeout(45_000)
+    });
+  } catch (error) {
+    // Network-level failure ("fetch failed"): surface the low-level cause (e.g. ENOTFOUND, ECONNREFUSED, a proxy or TLS error).
+    const cause = (error as { cause?: { code?: string; message?: string } })?.cause;
+    const detail = cause?.code || cause?.message || (error instanceof Error ? error.message : "unknown");
+    console.error("[elevenlabs] network error:", detail);
+    throw new Error(`Could not reach ElevenLabs (${detail}).`);
+  }
   if (!response.ok) {
     let detail = "";
     try {
