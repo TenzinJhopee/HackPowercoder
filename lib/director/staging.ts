@@ -1,6 +1,6 @@
 import type { Beat, Cue, Figure, SceneType } from "@/lib/contracts";
 import { ruleTags, spendingGroups, type MerchantTag } from "@/lib/merchant-tags";
-import { extractNumbers, MAX_CUES } from "./validate";
+import { extractNumbers, isOpeningScene, MAX_CUES } from "./validate";
 
 /**
  * Deterministic staging after validation: every beat must change something visible versus the one before it.
@@ -150,8 +150,10 @@ export function stageScript(script: Beat[], ctx: StagingContext): Beat[] {
     // The model tends to paste the screen it was given into every beat: that is not a choice of its own.
     const pasted = index > 0 && !!beat.scene && sameState(state, screen) && !mentions(beat.say, state.focus);
     if ((sameState(state, before) || pasted) && !beat.offer) {
-      // The first beat stays in the scene she is looking at; later beats may go anywhere.
-      const pick = candidates(beat.say, tags).find((c) => !sameState(c.state, before) && (index > 0 || c.state.type === ctx.currentScene));
+      // The first beat stays in the scene she is looking at (unless that is the opening view); later beats may go anywhere.
+      const pick = candidates(beat.say, tags).find(
+        (c) => !sameState(c.state, before) && (index > 0 || c.state.type === ctx.currentScene || isOpeningScene(ctx.currentScene))
+      );
       if (pick) {
         beat.scene = { type: pick.state.type, ...(pick.state.focus !== null ? { focus: pick.state.focus } : {}) };
         const cues = beat.cues ?? [];

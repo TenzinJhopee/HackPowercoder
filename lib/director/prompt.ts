@@ -56,7 +56,7 @@ Use only FACTS.affordability: the amount compared with what the private account 
 - Never read out a list: at most two or three items per sentence, joined the way people talk.
 - Do not hand back at the end ("shall we continue", "does that help", "anything else"): the app says that closing line itself. End with a question only when you are asking her something from an "ask" insight.
 - "say": one sentence, at most 18 words, spoken English, says "francs" (not CHF), writes numbers like 7,458. Never put a cue word first in the sentence.
-- The first step's scene.type MUST equal SCREEN.scene. Later steps may change scene.
+- The first step's scene.type MUST equal SCREEN.scene, except when SCREEN.scene is "galaxy" (the opening view, which shows no categories or months): then the first step goes straight to the scene the answer needs. Later steps may change scene.
 - "cues": 1 or 2 per step. A cue's "word" appears verbatim in "say" and is not its first word. The screen reacts when that word is spoken. A cue may have "target" (what to zoom into), "action", and "figure" (the big number on screen, {"label": "...", "value": 7458}).
 - Every step carries a "figure" shown from the start of the step: the one number that step is about, {"label":"Left after fixed costs","value":4383}, taken from FACTS, SERIES or a tool result. The label is short and says what the number is.
 
