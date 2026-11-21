@@ -575,6 +575,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$audio$2d$lines$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__AudioLines$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/audio-lines.js [app-ssr] (ecmascript) <export default as AudioLines>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$bot$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Bot$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/bot.js [app-ssr] (ecmascript) <export default as Bot>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$loader$2d$circle$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__LoaderCircle$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/loader-circle.js [app-ssr] (ecmascript) <export default as LoaderCircle>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$mic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Mic$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/mic.js [app-ssr] (ecmascript) <export default as Mic>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$plus$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Plus$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/plus.js [app-ssr] (ecmascript) <export default as Plus>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$send$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Send$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/send.js [app-ssr] (ecmascript) <export default as Send>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$shield$2d$check$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__ShieldCheck$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/shield-check.js [app-ssr] (ecmascript) <export default as ShieldCheck>");
@@ -766,7 +767,7 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                 await onCreateBudgets(draft.budgets);
             } else result = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$financial$2d$agent$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["executeFinancialTool"])(tool, context);
             const verifiedAnswer = formatToolAnswer(tool, result, currency);
-            let explanation = "I used the local deterministic calculation. Exact figures are shown below.";
+            let explanation = "Here’s what I found.";
             if (sharingConsent) {
                 try {
                     const response = await fetch("/api/agent/respond", {
@@ -1327,6 +1328,7 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                             columnNumber: 21
                         }, this),
                         recording && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                            "aria-live": "polite",
                             className: "mb-2 flex items-center gap-2 text-xs font-medium text-rose-200",
                             children: [
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1334,14 +1336,23 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                                 }, void 0, false, {
                                     fileName: "[project]/components/financial-agent.tsx",
                                     lineNumber: 403,
-                                    columnNumber: 103
+                                    columnNumber: 122
                                 }, this),
-                                " Recording · click Stop when you’re done"
+                                " Listening · tap Stop to send your question"
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/financial-agent.tsx",
                             lineNumber: 403,
                             columnNumber: 25
+                        }, this),
+                        transcribing && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                            "aria-live": "polite",
+                            className: "mb-2 text-center text-xs text-violet-200/75",
+                            children: "Transcribing your question…"
+                        }, void 0, false, {
+                            fileName: "[project]/components/financial-agent.tsx",
+                            lineNumber: 404,
+                            columnNumber: 28
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("form", {
                             className: "flex items-center gap-2 rounded-2xl border border-white/10 bg-[#15141c]/95 p-2 shadow-[0_14px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl focus-within:border-violet-300/45",
@@ -1357,12 +1368,12 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                                         size: 20
                                     }, void 0, false, {
                                         fileName: "[project]/components/financial-agent.tsx",
-                                        lineNumber: 405,
+                                        lineNumber: 406,
                                         columnNumber: 345
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/components/financial-agent.tsx",
-                                    lineNumber: 405,
+                                    lineNumber: 406,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -1381,7 +1392,7 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                                     value: question
                                 }, void 0, false, {
                                     fileName: "[project]/components/financial-agent.tsx",
-                                    lineNumber: 406,
+                                    lineNumber: 407,
                                     columnNumber: 13
                                 }, this),
                                 question.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1393,45 +1404,55 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                                         size: 17
                                     }, void 0, false, {
                                         fileName: "[project]/components/financial-agent.tsx",
-                                        lineNumber: 408,
+                                        lineNumber: 409,
                                         columnNumber: 250
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/components/financial-agent.tsx",
-                                    lineNumber: 408,
+                                    lineNumber: 409,
                                     columnNumber: 17
                                 }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
-                                    "aria-label": recording ? "Stop voice recording" : "Start voice recording",
+                                    "aria-label": recording ? "Finish voice question" : "Ask by voice",
+                                    "aria-pressed": recording,
                                     className: `flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition ${recording ? "bg-rose-400 text-white" : "bg-white text-violet-600 hover:bg-violet-100"} disabled:opacity-40`,
                                     disabled: busy || transcribing,
                                     onClick: ()=>{
                                         if (recording) stopRecording();
                                         else void startRecording();
                                     },
+                                    title: recording ? "Tap to send your question" : "Ask by voice",
                                     type: "button",
                                     children: recording ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$square$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Square$3e$__["Square"], {
                                         size: 15,
                                         fill: "currentColor"
                                     }, void 0, false, {
                                         fileName: "[project]/components/financial-agent.tsx",
-                                        lineNumber: 409,
-                                        columnNumber: 435
-                                    }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$audio$2d$lines$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__AudioLines$3e$__["AudioLines"], {
+                                        lineNumber: 410,
+                                        columnNumber: 517
+                                    }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$mic$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Mic$3e$__["Mic"], {
                                         size: 19
                                     }, void 0, false, {
                                         fileName: "[project]/components/financial-agent.tsx",
-                                        lineNumber: 409,
-                                        columnNumber: 478
+                                        lineNumber: 410,
+                                        columnNumber: 560
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/components/financial-agent.tsx",
-                                    lineNumber: 409,
+                                    lineNumber: 410,
                                     columnNumber: 17
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/financial-agent.tsx",
-                            lineNumber: 404,
+                            lineNumber: 405,
+                            columnNumber: 11
+                        }, this),
+                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                            className: "mt-2 text-center text-[10px] text-white/40",
+                            children: recording ? "Tap Stop when you’ve finished speaking." : "Tap the microphone to ask by voice. Your answer will be spoken aloud."
+                        }, void 0, false, {
+                            fileName: "[project]/components/financial-agent.tsx",
+                            lineNumber: 412,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("details", {
@@ -1442,7 +1463,7 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                                     children: "Voice & assistant settings"
                                 }, void 0, false, {
                                     fileName: "[project]/components/financial-agent.tsx",
-                                    lineNumber: 412,
+                                    lineNumber: 414,
                                     columnNumber: 13
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1463,7 +1484,7 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                                                     type: "checkbox"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/financial-agent.tsx",
-                                                    lineNumber: 415,
+                                                    lineNumber: 417,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1473,20 +1494,20 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                                                             children: "AI voice"
                                                         }, void 0, false, {
                                                             fileName: "[project]/components/financial-agent.tsx",
-                                                            lineNumber: 416,
+                                                            lineNumber: 418,
                                                             columnNumber: 23
                                                         }, this),
                                                         " — uses ElevenLabs TTS when available, with a browser voice fallback."
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/components/financial-agent.tsx",
-                                                    lineNumber: 416,
+                                                    lineNumber: 418,
                                                     columnNumber: 17
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/components/financial-agent.tsx",
-                                            lineNumber: 414,
+                                            lineNumber: 416,
                                             columnNumber: 15
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("label", {
@@ -1500,7 +1521,7 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                                                     type: "checkbox"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/financial-agent.tsx",
-                                                    lineNumber: 419,
+                                                    lineNumber: 421,
                                                     columnNumber: 17
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1510,32 +1531,32 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                                                             children: "Use local Ollama"
                                                         }, void 0, false, {
                                                             fileName: "[project]/components/financial-agent.tsx",
-                                                            lineNumber: 420,
+                                                            lineNumber: 422,
                                                             columnNumber: 23
                                                         }, this),
                                                         " — send this question and its minimized calculation to Apertus on this device. No transaction rows or cloud LLM services are used."
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/components/financial-agent.tsx",
-                                                    lineNumber: 420,
+                                                    lineNumber: 422,
                                                     columnNumber: 17
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/components/financial-agent.tsx",
-                                            lineNumber: 418,
+                                            lineNumber: 420,
                                             columnNumber: 15
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/components/financial-agent.tsx",
-                                    lineNumber: 413,
+                                    lineNumber: 415,
                                     columnNumber: 13
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/financial-agent.tsx",
-                            lineNumber: 411,
+                            lineNumber: 413,
                             columnNumber: 11
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1543,7 +1564,7 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                             children: "Financial information only · Not financial advice · Ollama runs on this device"
                         }, void 0, false, {
                             fileName: "[project]/components/financial-agent.tsx",
-                            lineNumber: 424,
+                            lineNumber: 426,
                             columnNumber: 11
                         }, this)
                     ]

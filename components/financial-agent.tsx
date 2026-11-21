@@ -187,7 +187,7 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
         await onCreateBudgets(draft.budgets);
       } else result = executeFinancialTool(tool, context);
       const verifiedAnswer = formatToolAnswer(tool, result, currency);
-      let explanation = "I used the local deterministic calculation. Exact figures are shown below.";
+      let explanation = "Here’s what I found.";
 
       if (sharingConsent) {
         try {
@@ -400,14 +400,16 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
         <div className="mx-auto max-w-3xl">
           {showSuggestions && messages.length > 1 && <div className="mb-3 flex flex-wrap gap-2">{suggestedQuestions.map((item) => <button className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-white/65 transition hover:border-violet-300/40 hover:text-white disabled:opacity-50" disabled={busy || transcribing} key={item} onClick={() => {setShowSuggestions(false);void submitQuestion(item);}} type="button">{item}</button>)}</div>}
           {error && <p className="mb-3 rounded-lg border border-amber-200/15 bg-amber-300/[0.08] px-3 py-2 text-xs leading-5 text-amber-100/85" role="alert">{error}</p>}
-          {recording && <p className="mb-2 flex items-center gap-2 text-xs font-medium text-rose-200"><span className="h-2 w-2 animate-pulse rounded-full bg-rose-400" /> Recording · click Stop when you’re done</p>}
+          {recording && <p aria-live="polite" className="mb-2 flex items-center gap-2 text-xs font-medium text-rose-200"><span className="h-2 w-2 animate-pulse rounded-full bg-rose-400" /> Listening · tap Stop to send your question</p>}
+          {transcribing && <p aria-live="polite" className="mb-2 text-center text-xs text-violet-200/75">Transcribing your question…</p>}
           <form className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#15141c]/95 p-2 shadow-[0_14px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl focus-within:border-violet-300/45" onSubmit={submitForm}>
             <button aria-expanded={showSuggestions} aria-label={showSuggestions ? "Hide quick questions" : "Show quick questions"} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-violet-300 transition hover:bg-white/5 hover:text-violet-100" onClick={() => setShowSuggestions((current) => !current)} type="button"><Plus size={20} /></button>
             <input aria-label="Ask the financial assistant" className="h-10 min-w-0 flex-1 bg-transparent px-1 text-sm text-white outline-none placeholder:text-white/40 disabled:opacity-50" disabled={busy || transcribing || recording} maxLength={1000} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => {if (event.key === "Enter" && !event.shiftKey) {event.preventDefault();void submitQuestion(question);}}} placeholder={recording ? "Listening…" : "Type your question here"} value={question} />
             {question.trim()
               ? <button aria-label="Send question" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#17131e] transition hover:bg-violet-100 disabled:opacity-40" disabled={busy || transcribing} type="submit"><Send size={17} /></button>
-              : <button aria-label={recording ? "Stop voice recording" : "Start voice recording"} className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition ${recording ? "bg-rose-400 text-white" : "bg-white text-violet-600 hover:bg-violet-100"} disabled:opacity-40`} disabled={busy || transcribing} onClick={() => {if (recording) stopRecording(); else void startRecording();}} type="button">{recording ? <Square size={15} fill="currentColor" /> : <AudioLines size={19} />}</button>}
+              : <button aria-label={recording ? "Finish voice question" : "Ask by voice"} aria-pressed={recording} className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition ${recording ? "bg-rose-400 text-white" : "bg-white text-violet-600 hover:bg-violet-100"} disabled:opacity-40`} disabled={busy || transcribing} onClick={() => {if (recording) stopRecording(); else void startRecording();}} title={recording ? "Tap to send your question" : "Ask by voice"} type="button">{recording ? <Square size={15} fill="currentColor" /> : <Mic size={19} />}</button>}
           </form>
+          <p className="mt-2 text-center text-[10px] text-white/40">{recording ? "Tap Stop when you’ve finished speaking." : "Tap the microphone to ask by voice. Your answer will be spoken aloud."}</p>
           <details className="group mt-3 text-[10px] text-white/45">
             <summary className="cursor-pointer list-none text-center transition hover:text-white/70">Voice &amp; assistant settings</summary>
             <div className="mt-3 grid gap-2 rounded-xl border border-white/10 bg-[#111018]/95 p-3 sm:grid-cols-2">

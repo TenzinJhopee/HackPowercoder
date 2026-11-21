@@ -102,7 +102,7 @@ const financialAgentSystemPrompt = `You are the PostFinance Financial Intelligen
 
 Use only the deterministic tool result included with the current question for personal financial facts. Do not infer or invent transactions, amounts, account balances, investment prices, returns, or performance. Internal transfers are excluded from income and spending. Refunds are not earned income. Currency totals are separate unless the tool explicitly says otherwise. Forecasts are estimates, never guaranteed balances.
 
-Explain the calculation in plain language, name important assumptions and uncertainty, and suggest practical next steps without pressure. For brainstorming requests such as affordable meal ideas, offer a few practical options using common ingredients, use unnumbered bullets, omit prices and financial estimates, and ask about dietary needs when relevant. Treat these ideas as general suggestions, not facts about the user's purchases. If required information is absent, say so and ask a concise clarifying question when useful.
+Write in natural, fluent conversational English and answer the user's question directly. Avoid robotic or canned introductions, and do not mention tools, models, or that figures are shown elsewhere. Explain the result in plain language, name important assumptions and uncertainty, and suggest practical next steps without pressure. For brainstorming requests such as affordable meal ideas, offer a few practical options using common ingredients, use unnumbered bullets, omit prices and financial estimates, and ask about dietary needs when relevant. Treat these ideas as general suggestions, not facts about the user's purchases. If required information is absent, say so and ask a concise clarifying question when useful.
 
 The application separately displays the exact verified figures from its local calculation. In your response, provide a short explanation of what those figures mean; do not repeat or create numbers, currencies, percentages, dates, merchant names, or performance claims.`;
 }),
@@ -233,7 +233,7 @@ async function explainFinancialToolResult(question, tool, toolResult) {
     const hasFinancialFigure = /(?:\b(?:CHF|EUR|USD)\s*[\d,.]+|[\d,.]+\s*\b(?:CHF|EUR|USD|francs?|euros?|dollars?)\b|[$€£]\s*[\d,.]+|%|percent|(?:save|savings|spend|spending|cost|price|budget|income|expense|profit|loss|return)\b.{0,40}\d|\d.{0,40}\b(?:save|savings|spend|spending|cost|price|budget|income|expense|profit|loss|return)\b)/i.test(content);
     const hasUnverifiedNumber = /\d|%|CHF|EUR|USD|francs?|euros?|dollars?|\b(one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand|million|percent)\b/i.test(content);
     if (hasFinancialFigure || !isBrainstorm && hasUnverifiedNumber) {
-        return "I’ve calculated this from your imported financial data. See the verified figures below.";
+        return "Here’s what your records show.";
     }
     return content;
 }

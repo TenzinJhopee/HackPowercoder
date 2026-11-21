@@ -91,7 +91,7 @@ export async function explainFinancialToolResult(question: string, tool: Financi
   const hasFinancialFigure = /(?:\b(?:CHF|EUR|USD)\s*[\d,.]+|[\d,.]+\s*\b(?:CHF|EUR|USD|francs?|euros?|dollars?)\b|[$€£]\s*[\d,.]+|%|percent|(?:save|savings|spend|spending|cost|price|budget|income|expense|profit|loss|return)\b.{0,40}\d|\d.{0,40}\b(?:save|savings|spend|spending|cost|price|budget|income|expense|profit|loss|return)\b)/i.test(content);
   const hasUnverifiedNumber = /\d|%|CHF|EUR|USD|francs?|euros?|dollars?|\b(one|two|three|four|five|six|seven|eight|nine|ten|hundred|thousand|million|percent)\b/i.test(content);
   if (hasFinancialFigure || (!isBrainstorm && hasUnverifiedNumber)) {
-    return "I’ve calculated this from your imported financial data. See the verified figures below.";
+    return "Here’s what your records show.";
   }
   return content;
 }
