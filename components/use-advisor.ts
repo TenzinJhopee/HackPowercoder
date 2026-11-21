@@ -11,6 +11,7 @@ import type { Beat, BeatQuestion, ConversationMode, Figure, Snapshot } from "@/l
 import { MAIN, SIDE_ANSWERS } from "@/content/scripts";
 import { GrainWorld } from "@/client/world/grain-world";
 import type { CaptionLine } from "./caption";
+import { keepReducer, type KeptSlip } from "./keepsake";
 import type { PlayingScript } from "./script-panel";
 import type { FigureChange } from "./stage";
 
@@ -31,6 +32,8 @@ type State = {
   offer: Beat | null;
   offerConfirmed: boolean;
   question: BeatQuestion | null;
+  /** The savings slip: stays until the user closes it or starts over. */
+  slip: KeptSlip | null;
   error: string | null;
 };
 
@@ -45,15 +48,19 @@ const initialState: State = {
   offer: null,
   offerConfirmed: false,
   question: null,
+  slip: null,
   error: null
 };
 
-type Action = { type: "engine"; event: EngineEvent } | { type: "confirmed" } | { type: "reset" };
+type Action = { type: "engine"; event: EngineEvent } | { type: "confirmed" } | { type: "closeSlip" } | { type: "reset" };
 
 function reducer(state: State, action: Action): State {
   if (action.type === "reset") return { ...initialState, figure: { seq: state.figure.seq + 1, from: null, to: OPENING_FIGURE } };
   if (action.type === "confirmed") return { ...state, offerConfirmed: true };
+  if (action.type === "closeSlip") return { ...state, slip: null };
   const event = action.event;
+  const slip = keepReducer(state.slip, event);
+  if (slip !== state.slip) state = { ...state, slip };
   switch (event.type) {
     case "line": {
       const step = event.beatIndex !== null && event.beatCount !== null ? { index: event.beatIndex, count: event.beatCount } : null;
@@ -146,6 +153,7 @@ export function useAdvisor() {
     engine.current?.confirmOffer(OFFER_JAR, OFFER_FIGURE);
     dispatch({ type: "confirmed" });
   }, []);
+  const closeSlip = useCallback(() => dispatch({ type: "closeSlip" }), []);
   const setSound = useCallback((on: boolean) => {
     setSoundState(on);
     voice.current?.setMuted(!on);
@@ -162,6 +170,7 @@ export function useAdvisor() {
     offer: state.offer,
     offerConfirmed: state.offerConfirmed,
     question: state.question,
+    slip: state.slip,
     error: state.error,
     world,
     sound,
@@ -172,6 +181,7 @@ export function useAdvisor() {
     resume,
     answer,
     confirmOffer,
+    closeSlip,
     setSound
   };
 }

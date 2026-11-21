@@ -13,13 +13,19 @@ import {
   type Snapshot,
   type World,
 } from "@/lib/contracts";
+import type { Keepsake } from "@/lib/savings-plan";
 import { Emitter, type EngineListener } from "../events";
 import { Player } from "../player/player";
 import { isBackupMode, type Speaker } from "../player/voice";
 import { classify, matchAnswer, targetIn } from "./intent";
 
 /** `script` may be built from the question (e.g. the amount in "Can I afford ...?"); no network either way. */
-export type PreparedAnswer = { match: (question: string) => boolean; script: Script | ((question: string) => Script) };
+export type PreparedAnswer = {
+  match: (question: string) => boolean;
+  script: Script | ((question: string) => Script);
+  /** Something that stays on screen after the answer (emitted as a "keep" event). */
+  keep?: (question: string) => Keepsake | null;
+};
 
 export type ConversationOptions = {
   world: World;
@@ -160,6 +166,8 @@ export class Conversation {
     const preparedScript = prepared && (typeof prepared.script === "function" ? prepared.script(question) : prepared.script);
     if (preparedScript) {
       this.events.emit({ type: "script", kind: "side", script: preparedScript, source: "prepared" });
+      const keepsake = prepared?.keep?.(question);
+      if (keepsake) this.events.emit({ type: "keep", keepsake });
       if (!(await this.playSide(preparedScript, my))) return;
       return this.finishSide(my);
     }

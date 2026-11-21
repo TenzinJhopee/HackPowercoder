@@ -1,5 +1,5 @@
 import { measureAgainstSurplus, parseAmount, parseMonth, replayPurchase, type BalancePoint } from "../lib/afford";
-import { savingsPlan } from "../lib/savings-plan";
+import { savingsPlan, type Keepsake } from "../lib/savings-plan";
 import { DEFAULT_BRIDGE, DIRECTOR_FAILURE_LINE, FILLER_LINE, FILLER_LINES, type Breakdown, type Script } from "../lib/contracts";
 import type { FactsExport } from "../lib/facts-export";
 import rawFacts from "../public/facts.json";
@@ -130,7 +130,15 @@ export const MAIN: Script = [
 // ---------- Prepared side answers (June, July, September, November) ----------
 
 /** `script` may be built from the question (the affordability answer); every other answer is fixed. */
-export type SideAnswer = { id: string; match(question: string): boolean; script: Script | ((question: string) => Script); /** Scripts a built answer produces for its fixed example (for voice pre-generation and the number test). */ examples?: () => Script[] };
+export type SideAnswer = {
+  id: string;
+  match(question: string): boolean;
+  script: Script | ((question: string) => Script);
+  /** Scripts a built answer produces for its fixed example (for voice pre-generation and the number test). */
+  examples?: () => Script[];
+  /** What stays on screen after the answer (the savings slip), built from the same question. */
+  keep?: (question: string) => Keepsake | null;
+};
 
 const asks = (pattern: RegExp) => (question: string) => pattern.test(question.toLocaleLowerCase("en"));
 
@@ -235,11 +243,20 @@ function saveTarget(question: string): number | null {
   return amount !== null && amount >= 20 ? amount : null;
 }
 
+const purchaseName = (merchant: string): [string, string] => PURCHASE_NAMES[merchant] ?? [`${merchant} purchase`, `${merchant} purchases`];
+const planFor = (target: number) => savingsPlan(target, facts.savings.habits, facts.savings.months, facts.savings.excluded);
+
+/** The plan the savings answer speaks, with each cut's display name (plural), for the slip that stays on screen. */
+export function saveKeepsake(target: number): Keepsake {
+  const plan = planFor(target);
+  return { kind: "savings", plan, names: plan.cuts.map((cut) => purchaseName(cut.merchant)[1]) };
+}
+
 /** One beat per cut, then the total; when her habits cannot reach the target, that is said plainly. */
 export function saveScript(target: number): Script {
-  const plan = savingsPlan(target, facts.savings.habits, facts.savings.months, facts.savings.excluded);
+  const plan = planFor(target);
   const script: Script = plan.cuts.map((cut) => {
-    const [one, many] = PURCHASE_NAMES[cut.merchant] ?? [`${cut.merchant} purchase`, `${cut.merchant} purchases`];
+    const [one, many] = purchaseName(cut.merchant);
     const cueWord = (cut.fewer === 1 ? one : many).split(" ")[0];
     return {
       say: `${cut.fewer} fewer ${cut.fewer === 1 ? one : many} a month, of your usual ${cut.usualPerMonth}, saves about ${francs(cut.saves)} francs.`,
@@ -274,7 +291,8 @@ const saveTargetAnswer: SideAnswer = {
   id: "save-target",
   match: (question) => SAVE_QUESTION.test(question) && saveTarget(question) !== null,
   script: (question) => saveScript(saveTarget(question)!),
-  examples: () => [saveScript(saveTarget(SAVE_EXAMPLE)!)]
+  examples: () => [saveScript(saveTarget(SAVE_EXAMPLE)!)],
+  keep: (question) => saveKeepsake(saveTarget(question)!)
 };
 
 export const SIDE_ANSWERS: SideAnswer[] = [

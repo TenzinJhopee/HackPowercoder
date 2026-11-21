@@ -36,6 +36,13 @@ export interface SavingsPlan {
   shortfall: number;
 }
 
+/** A plan that stays on screen after it is spoken; `names[i]` is how cut i is called (plural, from PURCHASE_NAMES). */
+export interface Keepsake {
+  kind: "savings";
+  plan: SavingsPlan;
+  names: string[];
+}
+
 const MIN_PER_MONTH = 2;
 /** A purchase cheaper than this is not worth naming as a cut. */
 const MIN_EACH = 5;
