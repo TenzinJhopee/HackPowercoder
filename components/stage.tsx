@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Figure } from "@/lib/contracts";
 import { swiss } from "./format";
 import type { GrainWorld } from "@/client/world/grain-world";
@@ -62,7 +62,7 @@ function FigureCounter({ change }: { change: FigureChange | null }) {
   );
 }
 
-export function Stage({ world, figure, pausedAt }: { world: GrainWorld; figure: FigureChange | null; pausedAt: string | null }) {
+export function Stage({ world, figure, pausedAt, status }: { world: GrainWorld; figure: FigureChange | null; pausedAt: string | null; status?: ReactNode }) {
   return (
     <section aria-label="Stage" className="rounded-2xl border border-line bg-surface p-5 shadow-card md:flex md:h-full md:min-h-0 md:flex-col md:p-5">
       <FigureCounter change={figure} />
@@ -70,8 +70,11 @@ export function Stage({ world, figure, pausedAt }: { world: GrainWorld; figure: 
         <StageCanvas world={world} />
       </div>
       <div className="mt-3 flex min-h-[1.75rem] shrink-0 items-center justify-between gap-3">
-        <p className="text-xs text-faint">1 grain = CHF 100</p>
-        {pausedAt && <span className="rounded-full bg-saved/10 px-3 py-1 text-xs font-medium text-saved-ink">{`↩ Paused at ${pausedAt}`}</span>}
+        <p className="shrink-0 text-xs text-faint">1 grain = CHF 100</p>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+          {pausedAt && <span className="rounded-full bg-saved/10 px-3 py-1 text-xs font-medium text-saved-ink">{`↩ Paused at ${pausedAt}`}</span>}
+          {status}
+        </div>
       </div>
     </section>
   );

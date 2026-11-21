@@ -42,38 +42,30 @@ export function StatusBar(props: { sound: boolean; scriptOpen: boolean; onSound:
   );
 }
 
-/** Current conversation mode (and backup flag) as a small pill above the step bar. */
-export function ModeLine({ mode, backup }: { mode: ConversationMode; backup: boolean }) {
-  return (
-    <p className="flex min-w-0 items-center gap-2 text-sm font-medium text-ink" aria-live="polite">
-      <span className="truncate">{modeText[mode]}</span>
-      {backup && <span className="shrink-0 rounded-full bg-sun-soft px-2 py-0.5 text-[10px] font-semibold text-faint">backup mode</span>}
-    </p>
-  );
-}
-
 type Step = { index: number; count: number } | null;
 
-/** Amber segments for main beats, green for side answers. */
-export function StepBar({ main, side, mode }: { main: Step; side: Step; mode: ConversationMode }) {
-  const mainCount = main?.count ?? 8;
-  const finished = mode === "finished";
+/** The dot in front of the status: what kind of moment this is. */
+const modeDot: Partial<Record<ConversationMode, string>> = {
+  presenting: "bg-brand",
+  returning: "bg-brand",
+  side: "bg-saved",
+  listening: "bg-coral",
+  answering: "bg-sun-deep"
+};
+
+/**
+ * Where we are, in one small pill: what is happening and, while a script is playing, the step as a fraction
+ * ("Presenting your year 2/10", "Answering your question 1/3"). Lives in the stage footer, so it takes no room above.
+ */
+export function ProgressPill({ mode, backup, main, side }: { mode: ConversationMode; backup: boolean; main: Step; side: Step }) {
+  const step = mode === "side" ? side : mode === "presenting" || mode === "returning" || mode === "answering" ? main : null;
   return (
-    <div className="space-y-1.5" aria-hidden="true">
-      <div className="flex gap-1">
-        {Array.from({ length: mainCount }, (_, i) => {
-          const done = finished || (main !== null && i < main.index);
-          const current = !finished && main !== null && i === main.index;
-          return <span key={i} className={`h-1 flex-1 rounded-full ${done ? "bg-brand/50" : current ? "bg-brand" : "bg-line"}`} />;
-        })}
-      </div>
-      <div className="flex h-1 gap-1">
-        {side &&
-          Array.from({ length: side.count }, (_, i) => (
-            <span key={i} className={`h-1 flex-1 rounded-full ${i < side.index ? "bg-saved/60" : i === side.index ? "bg-saved" : "bg-line"}`} />
-          ))}
-      </div>
-    </div>
+    <p className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full bg-sun-soft px-3 py-1 text-xs font-medium text-ink" aria-live="polite">
+      <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${modeDot[mode] ?? "bg-faint"}`} />
+      <span className="truncate">{modeText[mode]}</span>
+      {step && <span className="shrink-0 font-semibold tabular-nums text-brand">{`${step.index + 1}/${step.count}`}</span>}
+      {backup && <span className="shrink-0 text-faint">{"\u00b7 backup"}</span>}
+    </p>
   );
 }
 
@@ -96,7 +88,7 @@ export function Chips({ mode, canContinue, question, onStart, onSay, onResume, o
     finished: [{ label: "Start over", run: onStart, primary: true }]
   };
   return (
-    <div className="flex min-h-[4.5rem] flex-wrap content-start gap-2 md:max-h-28 md:min-h-0 md:shrink-0 md:overflow-y-auto">
+    <div className="flex min-h-[4.5rem] flex-wrap content-start gap-2 md:max-h-44 md:min-h-0 md:shrink-0 md:overflow-y-auto">
       {chips[mode].map((chip) => (
         <button
           key={chip.label}

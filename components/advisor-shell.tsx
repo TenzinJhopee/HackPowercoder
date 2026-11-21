@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Chips, InputRow, ModeLine, StatusBar, StepBar, useInputFocus } from "./controls";
+import { Chips, InputRow, ProgressPill, StatusBar, useInputFocus } from "./controls";
 import { OfferCard } from "./offer-card";
 import { ScriptPanel } from "./script-panel";
 import { Stage } from "./stage";
@@ -45,12 +45,8 @@ export function AdvisorShell() {
         onScript={() => setScriptOpen((open) => !open)}
       />
       <main className="mx-auto w-full max-w-2xl px-4 pb-8 pt-5 md:flex md:min-h-0 md:max-w-3xl md:flex-1 md:flex-col md:px-6 md:pb-5 md:pt-4 lg:max-w-6xl lg:px-8 lg:pb-6 lg:pt-5">
-        <div className="space-y-2.5 pb-4 md:shrink-0 md:pb-3">
-          <ModeLine mode={advisor.mode} backup={availability.backup} />
-          <StepBar main={advisor.mainStep} side={advisor.sideStep} mode={advisor.mode} />
-        </div>
         <div className="flex flex-col gap-4 md:grid md:min-h-0 md:flex-1 md:grid-rows-[minmax(0,3fr)_minmax(0,2fr)] md:gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:grid-rows-1 lg:gap-6">
-          <Stage world={advisor.world} figure={advisor.figure} pausedAt={pausedAt} />
+          <Stage world={advisor.world} figure={advisor.figure} pausedAt={pausedAt} status={<ProgressPill mode={advisor.mode} backup={availability.backup} main={advisor.mainStep} side={advisor.sideStep} />} />
           <div className="flex min-w-0 flex-col gap-4 md:min-h-0 md:gap-3">
             {advisor.mode === "idle" && advisor.log.length === 0 && !advisor.line ? (
               <Welcome onSay={advisor.say} onStart={advisor.start} />
