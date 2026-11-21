@@ -43,11 +43,11 @@ function FigureCounter({ change }: { change: FigureChange | null }) {
     return () => cancelAnimationFrame(raf);
   }, [change]);
 
-  const tone = change && change.to.value < 0 ? "text-coral" : "text-paper";
+  const tone = change && change.to.value < 0 ? "text-coral-ink" : "text-ink";
   return (
-    <div className="min-h-[5.25rem]">
-      <p className="min-h-[1.25rem] text-xs uppercase tracking-wide text-faint">{change?.to.label ?? " "}</p>
-      <p className={`text-5xl font-semibold tabular-nums leading-tight sm:text-6xl ${tone}`} aria-live="off">
+    <div className="min-h-[5.25rem] lg:min-h-[7.25rem]">
+      <p className="min-h-[1.25rem] text-[11px] font-bold uppercase tracking-[0.15em] text-faint">{change?.to.label ?? " "}</p>
+      <p className={`text-5xl font-semibold tabular-nums leading-tight sm:text-6xl lg:text-7xl ${tone}`} aria-live="off">
         {shown === null ? "–" : swiss(shown)}
       </p>
     </div>
@@ -56,14 +56,14 @@ function FigureCounter({ change }: { change: FigureChange | null }) {
 
 export function Stage({ world, figure, pausedAt }: { world: GrainWorld; figure: FigureChange | null; pausedAt: string | null }) {
   return (
-    <section aria-label="Stage" className="rounded-2xl border border-edge bg-panel p-4">
+    <section aria-label="Stage" className="rounded-2xl border border-line bg-white p-5 shadow-card md:p-6">
       <FigureCounter change={figure} />
-      <div className="mt-2 h-60 w-full overflow-hidden rounded-xl bg-night sm:h-80">
+      <div className="mt-2 h-60 w-full overflow-hidden sm:h-80 md:h-[26rem] lg:h-[min(32rem,62vh)] lg:min-h-[24rem]">
         <StageCanvas world={world} />
       </div>
       <div className="mt-3 flex min-h-[1.75rem] items-center justify-between gap-3">
         <p className="text-xs text-faint">1 grain = CHF 100</p>
-        {pausedAt && <span className="rounded-full bg-saved/15 px-3 py-1 text-xs font-medium text-saved">{`↩ Paused at ${pausedAt}`}</span>}
+        {pausedAt && <span className="rounded-full bg-saved/10 px-3 py-1 text-xs font-medium text-saved-ink">{`↩ Paused at ${pausedAt}`}</span>}
       </div>
     </section>
   );

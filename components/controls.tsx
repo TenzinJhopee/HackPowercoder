@@ -3,6 +3,7 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import type { BeatQuestion, ConversationMode } from "@/lib/contracts";
 import { AFFORD_EXAMPLE } from "@/content/scripts";
+import { Logo } from "./logo";
 
 const modeText: Record<ConversationMode, string> = {
   idle: "Ready",
@@ -15,24 +16,36 @@ const modeText: Record<ConversationMode, string> = {
   finished: "Finished"
 };
 
-const buttonBase = "rounded-full border border-edge px-3 py-1.5 text-xs text-paper transition-colors hover:border-faint focus-visible:outline focus-visible:outline-1 focus-visible:outline-paper";
+const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+const buttonBase = `rounded-lg border border-line bg-white px-3 py-2 text-xs font-semibold text-ink shadow-sm transition-colors hover:border-slate-300 aria-pressed:bg-canvas ${focusRing}`;
+const primaryBase = `bg-brand text-white shadow-sm shadow-brand/20 transition-colors hover:bg-[#c42833] ${focusRing}`;
 
-export function StatusBar(props: { mode: ConversationMode; backup: boolean; sound: boolean; scriptOpen: boolean; onSound: () => void; onScript: () => void }) {
+/** Luma header: logo and wordmark on the left, sound and script toggles on the right. */
+export function StatusBar(props: { sound: boolean; scriptOpen: boolean; onSound: () => void; onScript: () => void }) {
   return (
-    <header className="flex items-center justify-between gap-2">
-      <p className="min-w-0 truncate text-sm text-paper" aria-live="polite">
-        {modeText[props.mode]}
-        {props.backup && <span className="ml-2 text-xs text-faint">backup mode</span>}
-      </p>
-      <div className="flex shrink-0 gap-2">
-        <button type="button" className={buttonBase} aria-pressed={props.sound} onClick={props.onSound}>
-          {props.sound ? "Sound on" : "Sound off"}
-        </button>
-        <button type="button" className={buttonBase} aria-pressed={props.scriptOpen} onClick={props.onScript}>
-          Script
-        </button>
+    <header className="sticky top-0 z-20 border-b border-line bg-white/90 backdrop-blur-md">
+      <div className="mx-auto flex h-[68px] w-full max-w-2xl items-center justify-between gap-2 px-4 md:max-w-3xl md:px-6 lg:max-w-6xl lg:px-8">
+        <Logo />
+        <div className="flex shrink-0 gap-2">
+          <button type="button" className={buttonBase} aria-pressed={props.sound} onClick={props.onSound}>
+            {props.sound ? "Sound on" : "Sound off"}
+          </button>
+          <button type="button" className={buttonBase} aria-pressed={props.scriptOpen} onClick={props.onScript}>
+            Script
+          </button>
+        </div>
       </div>
     </header>
+  );
+}
+
+/** Current conversation mode (and backup flag) as a small pill above the step bar. */
+export function ModeLine({ mode, backup }: { mode: ConversationMode; backup: boolean }) {
+  return (
+    <p className="flex min-w-0 items-center gap-2 text-sm font-medium text-ink" aria-live="polite">
+      <span className="truncate">{modeText[mode]}</span>
+      {backup && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-faint">backup mode</span>}
+    </p>
   );
 }
 
@@ -48,33 +61,33 @@ export function StepBar({ main, side, mode }: { main: Step; side: Step; mode: Co
         {Array.from({ length: mainCount }, (_, i) => {
           const done = finished || (main !== null && i < main.index);
           const current = !finished && main !== null && i === main.index;
-          return <span key={i} className={`h-1 flex-1 rounded-full ${done ? "bg-spend/60" : current ? "bg-spend" : "bg-edge"}`} />;
+          return <span key={i} className={`h-1 flex-1 rounded-full ${done ? "bg-spend/60" : current ? "bg-spend" : "bg-[#e3e8ee]"}`} />;
         })}
       </div>
       <div className="flex h-1 gap-1">
         {side &&
           Array.from({ length: side.count }, (_, i) => (
-            <span key={i} className={`h-1 flex-1 rounded-full ${i < side.index ? "bg-saved/60" : i === side.index ? "bg-saved" : "bg-edge"}`} />
+            <span key={i} className={`h-1 flex-1 rounded-full ${i < side.index ? "bg-saved/60" : i === side.index ? "bg-saved" : "bg-[#e3e8ee]"}`} />
           ))}
       </div>
     </div>
   );
 }
 
-type Chip = { label: string; run: () => void };
+type Chip = { label: string; run: () => void; primary?: boolean };
 
 export function Chips({ mode, question, onStart, onSay, onResume, onMore, onAnswer }: { mode: ConversationMode; question?: BeatQuestion | null; onStart: () => void; onSay: (text: string) => void; onResume: () => void; onMore: () => void; onAnswer?: (id: string) => void }) {
   const ask = (text: string): Chip => ({ label: text, run: () => onSay(text) });
-  const cont: Chip = { label: "OK, let's continue", run: onResume };
+  const cont: Chip = { label: "OK, let's continue", run: onResume, primary: true };
   const chips: Record<ConversationMode, Chip[]> = {
-    idle: [{ label: "Start the presentation", run: onStart }],
+    idle: [{ label: "Start the presentation", run: onStart, primary: true }],
     presenting: [ask("Wait, why is September so high?"), ask("Wait, how can I save money?"), ask("Wait, what am I looking at?")],
     listening: [ask("Why is September so high?"), ask("Why was November high?"), ask("How can I save money?"), ask("What are my spending habits?"), ask(AFFORD_EXAMPLE), cont],
     side: [cont],
     waiting: [cont, { label: "One more question", run: onMore }],
     answering: (question?.answers ?? []).map((a, i) => ({ label: a.label, run: () => onAnswer?.(a.id), primary: i === 0 })),
     returning: [],
-    finished: [{ label: "Start over", run: onStart }]
+    finished: [{ label: "Start over", run: onStart, primary: true }]
   };
   return (
     <div className="flex min-h-[4.5rem] flex-wrap content-start gap-2">
@@ -83,7 +96,11 @@ export function Chips({ mode, question, onStart, onSay, onResume, onMore, onAnsw
           key={chip.label}
           type="button"
           onClick={chip.run}
-          className="rounded-full border border-edge bg-panel px-4 py-2 text-left text-sm text-paper transition-colors hover:border-faint focus-visible:outline focus-visible:outline-1 focus-visible:outline-paper"
+          className={
+            chip.primary
+              ? `rounded-full px-5 py-2.5 text-left text-sm font-semibold ${primaryBase}`
+              : `rounded-full border border-line bg-white px-4 py-2 text-left text-sm font-medium text-ink shadow-sm transition-colors hover:border-slate-300 ${focusRing}`
+          }
         >
           {chip.label}
         </button>
@@ -116,7 +133,7 @@ export function InputRow(props: InputProps) {
   const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") submit();
   };
-  const small = "h-11 shrink-0 rounded-xl border border-edge px-3 text-sm text-paper transition-colors hover:border-faint disabled:opacity-40 focus-visible:outline focus-visible:outline-1 focus-visible:outline-paper";
+  const small = `h-11 shrink-0 rounded-xl border border-line bg-white px-3 text-sm font-semibold text-ink shadow-sm transition-colors hover:border-slate-300 disabled:opacity-40 ${focusRing}`;
   return (
     <div className="flex items-center gap-2">
       <input
@@ -126,7 +143,7 @@ export function InputRow(props: InputProps) {
         onKeyDown={onKey}
         placeholder="Ask about what is on screen"
         aria-label="Your question"
-        className="h-11 min-w-0 flex-1 rounded-xl border border-edge bg-panel px-3 text-sm text-paper placeholder:text-faint focus:border-faint focus:outline-none"
+        className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none"
       />
       <button
         type="button"
@@ -141,14 +158,14 @@ export function InputRow(props: InputProps) {
         onPointerLeave={props.onMicUp}
         onPointerCancel={props.onMicUp}
         onContextMenu={(event) => event.preventDefault()}
-        className={`${small} select-none touch-none ${props.micActive ? "border-spend text-spend" : ""}`}
+        className={`${small} select-none touch-none ${props.micActive ? "border-brand text-brand" : ""}`}
       >
         {props.micActive ? "● Mic" : "Mic"}
       </button>
       <button type="button" disabled={!canStop} onClick={props.onStop} className={small}>
         Stop
       </button>
-      <button type="button" onClick={submit} disabled={!props.text.trim()} className={`${small} bg-paper text-night hover:bg-paper/90`}>
+      <button type="button" onClick={submit} disabled={!props.text.trim()} className={`h-11 shrink-0 rounded-xl px-4 text-sm font-semibold disabled:opacity-40 ${primaryBase}`}>
         Ask
       </button>
     </div>

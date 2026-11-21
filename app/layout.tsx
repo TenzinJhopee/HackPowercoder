@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Pfagent",
-  description: "Voice-based personal finance advisor (hackathon prototype)."
+  title: "Luma — Your money, in focus",
+  description: "A private, thoughtful view of your finances. Independent prototype, not affiliated with PostFinance."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

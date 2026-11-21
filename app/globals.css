@@ -2,16 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #f6f7f9;
+}
+
 body {
   margin: 0;
-  background: #0b0d12;
-  color: #e8eaf0;
+  background: #f6f7f9;
+  color: #142238;
   font-family: var(--font-inter), Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-html {
-  background: #0b0d12;
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: #fbe4e6;
+  color: #142238;
 }
 
 @media (prefers-reduced-motion: reduce) {

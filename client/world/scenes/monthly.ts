@@ -244,7 +244,7 @@ export class MonthlyScene extends Scene {
       for (const p of opened.parts) {
         const dim = focusPart && p.name !== focusPart ? 0.4 : 1;
         const strong = p.name === focusPart;
-        e.label(ctx, p.name, p.x, p.y + p.r, { color: strong ? theme.paper : "#a9afbd", alpha: pa * dim, dy: 12, weight: strong ? 600 : 400 });
+        e.label(ctx, p.name, p.x, p.y + p.r, { color: strong ? theme.paper : theme.soft, alpha: pa * dim, dy: 12, weight: strong ? 600 : 400 });
         e.label(ctx, swiss(p.value), p.x, p.y + p.r, { color: theme.faint, alpha: pa * dim, dy: 25, size: 10 });
       }
     }

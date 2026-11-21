@@ -624,8 +624,8 @@ export class Engine {
     let cache = this.spotGradient;
     if (!cache || cache.x !== sp.x || cache.y !== sp.y || cache.r !== sp.r) {
       const g = ctx.createRadialGradient(sp.x, sp.y, sp.r * 0.8, sp.x, sp.y, sp.r * 2.6);
-      g.addColorStop(0, "rgba(11,13,18,0)");
-      g.addColorStop(1, "rgba(11,13,18,0.82)");
+      g.addColorStop(0, "rgba(255,255,255,0)");
+      g.addColorStop(1, "rgba(255,255,255,0.8)");
       cache = this.spotGradient = { g, x: sp.x, y: sp.y, r: sp.r };
     }
     const grad = cache.g;

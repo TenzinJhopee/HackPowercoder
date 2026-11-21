@@ -66,7 +66,7 @@ export class PoolsScene extends Scene {
       const hit = p.name === this.focusKey;
       if (!hit && p.grains.length < 10) return;
       const dim = this.focusKey && !hit ? 0.4 : 1;
-      e.label(ctx, p.name, p.x, p.y + p.r, { color: hit ? theme.paper : p.saved ? theme.saved : "#a9afbd", alpha: a * dim, dy: 12, weight: hit ? 600 : 400 });
+      e.label(ctx, p.name, p.x, p.y + p.r, { color: hit ? theme.paper : p.saved ? theme.saved : theme.soft, alpha: a * dim, dy: 12, weight: hit ? 600 : 400 });
       if (hit || e.cam.s < 1.1) e.label(ctx, swiss(p.value), p.x, p.y + p.r, { color: theme.faint, alpha: a * dim, dy: 24, size: 10 });
     });
   }
