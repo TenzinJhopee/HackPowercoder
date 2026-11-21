@@ -1,4 +1,5 @@
 import type { Breakdown, SceneType, World } from "@/lib/contracts";
+import { pickChoreo, pickFocusStyle, type ChoreoName, type FocusStyle } from "./choreo";
 import { Engine } from "./engine";
 import type { ApplyKind, Category, Scene, SceneEnv, WorldFacts } from "./scenes/base";
 import { GalaxyScene } from "./scenes/galaxy";
@@ -36,6 +37,13 @@ export class GrainWorld implements World {
   private scene: Scene | null = null;
   private entered = false;
   private loading: Promise<void> | null = null;
+  // Variety guard (pfagent.md 7): the last choreography and focus look, so neither repeats immediately.
+  private seen = new Set<SceneType>();
+  private lastChoreo: ChoreoName | null = null;
+  private lastFocus: FocusStyle | null = null;
+  private focusCount = 0;
+  private choreo: ChoreoName | null = null;
+  private effectLog: string[] = [];
 
   currentScene(): SceneType | null {
     return this.type;
@@ -54,7 +62,17 @@ export class GrainWorld implements World {
     return this.scene?.openMonth() ?? null;
   }
 
+  /** Effects played so far, newest last (debugging and the backup recording); not part of World. */
+  effects(): readonly string[] {
+    return this.effectLog;
+  }
+
   enter(type: SceneType): void {
+    const from = this.type ? sceneOf(this.type) : null;
+    const to = sceneOf(type);
+    this.choreo = this.lastChoreo = pickChoreo(from, to, this.seen, this.lastChoreo);
+    this.seen.add(to);
+    this.note(`enter:${to}:${this.choreo}`);
     this.type = type;
     this.scene = this.env ? this.make(type, this.env) : null;
     this.entered = false;
@@ -62,7 +80,17 @@ export class GrainWorld implements World {
   }
 
   focus(target: string | number): void {
-    if (this.scene?.setFocus(target)) this.run("update");
+    const scene = this.scene;
+    if (!scene) return;
+    const before = scene.focusKey;
+    if (!scene.setFocus(target)) return;
+    const key = scene.focusKey;
+    if (key !== null && key !== before) {
+      scene.focusStyle = this.lastFocus = pickFocusStyle(key, this.focusCount++, this.lastFocus, this.engine.reduced);
+      scene.focusFx = true;
+      this.note(`focus:${key}:${scene.focusStyle}`);
+    }
+    this.run("update");
   }
 
   unfocus(): void {
@@ -80,14 +108,20 @@ export class GrainWorld implements World {
   }
 
   ghost(target: string | number): void {
-    if (this.scene?.setGhost(target)) this.run("update");
+    if (this.scene?.setGhost(target)) {
+      this.note(`iris:${target}`);
+      this.run("update");
+    }
   }
 
   fillJar(jar: string): void {
     const name = jarName(jar);
     if (!name) return;
     this.filled.add(name);
-    if (this.scene?.fillJar(name)) this.run("update");
+    if (this.scene?.fillJar(name)) {
+      this.note(`transform:${name}`);
+      this.run("update");
+    }
   }
 
   /** Not part of World: clear demo state (filled jars, focus, breakdown) when the presentation starts over. No cut. */
@@ -99,6 +133,8 @@ export class GrainWorld implements World {
   /** Host the engine on a canvas (stage-canvas.tsx). Loads facts.json once. */
   attach(canvas: HTMLCanvasElement): void {
     this.engine.attach(canvas);
+    // Development only: lets the browser check read the effect log.
+    if (process.env.NODE_ENV !== "production") (window as unknown as { __grainWorld?: GrainWorld }).__grainWorld = this;
     void this.load();
   }
 
@@ -142,7 +178,18 @@ export class GrainWorld implements World {
     return this.loading;
   }
 
+  private note(effect: string): void {
+    this.effectLog.push(effect);
+    if (this.effectLog.length > 40) this.effectLog.shift();
+  }
+
   private make(type: SceneType, env: SceneEnv): Scene {
+    const scene = this.makeScene(type, env);
+    scene.entrance = this.choreo ? { name: this.choreo, pivot: null } : null;
+    return scene;
+  }
+
+  private makeScene(type: SceneType, env: SceneEnv): Scene {
     switch (type) {
       case "galaxy":
         return new GalaxyScene(env);
@@ -168,6 +215,9 @@ export class GrainWorld implements World {
     scene.apply(kind);
   }
 }
+
+/** Scene that actually draws a type (river and travel borrow pools). */
+const sceneOf = (type: SceneType): SceneType => (type === "galaxy" || type === "monthly" || type === "level" || type === "jars" ? type : "pools");
 
 function toCategories(facts: WorldFacts): Category[] {
   const spending = Object.entries(facts.categories_yearly_net_of_refunds)

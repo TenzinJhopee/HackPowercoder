@@ -1,9 +1,9 @@
 import type { Breakdown } from "@/lib/contracts";
 import { swiss } from "@/components/format";
 import { theme } from "@/components/theme";
-import { palette, type Box, type Grain } from "../engine";
+import { noise, palette, type Box, type Grain, type Timing } from "../engine";
 import { assignColumns, clusterRadius, columnGrid, largestRemainder, packClusters, phyllotaxis, pick, type ColumnGrid } from "../layout";
-import { MONTHS, Scene, drawGhost, ghostFor, timing, toMonth, type ApplyKind } from "./base";
+import { MONTHS, Scene, drawGhost, ghostFor, toMonth, type ApplyKind } from "./base";
 
 type Part = { name: string; value: number; aliases?: string[]; count: number; x: number; y: number; r: number };
 type Open = { month: number; parts: Part[]; c: number; region: Box };
@@ -17,6 +17,8 @@ export class MonthlyScene extends Scene {
   private opened: Open | null = null;
   private ghosts = new Map<number, number>();
   private openedAt = 0;
+  /** Month whose parts the last layout showed (to tell a breakdown or a collapse from other updates). */
+  private shownOpen: number | null = null;
 
   private get counts() {
     return this.env.facts.monthly_spending_jan_dec.map((v) => Math.max(0, Math.round(v / 100)));
@@ -86,6 +88,10 @@ export class MonthlyScene extends Scene {
       if (kind === "enter") this.park(rest);
     }
     const opened = (this.opened = this.open ? this.layoutOpen(grid) : null);
+    const was = this.shownOpen;
+    const openingNow = kind === "update" && opened !== null && opened.month !== was;
+    const closing = kind === "update" && was !== null && opened?.month !== was ? was : null;
+    this.shownOpen = opened?.month ?? null;
     const focusMonth = typeof this.focusKey === "number" ? this.focusKey : null;
     const focusPart = typeof this.focusKey === "string" ? this.focusKey : null;
     const r = grid.pitch * 0.38;
@@ -95,13 +101,14 @@ export class MonthlyScene extends Scene {
     this.columns.forEach((column, i) => {
       const month = i + 1;
       const isOpen = opened?.month === month;
-      const dim = opened ? (isOpen ? 1 : 0.1) : focusMonth ? (month === focusMonth ? 1 : 0.32) : 1;
+      const look = opened ? { dim: isOpen ? 1 : 0.1, lift: 0 } : this.focal(focusMonth ? month === focusMonth : null);
       let part = 0;
       let inPart = 0;
       column.forEach((g, k) => {
         let pos = grid.slot(i, k, 1, g);
-        let partDim = 1;
+        let partLook = { dim: 1, lift: 0 };
         let gr = r;
+        let t: Timing | null = null;
         if (isOpen && opened) {
           while (part < opened.parts.length - 1 && inPart >= opened.parts[part].count) {
             part++;
@@ -110,10 +117,17 @@ export class MonthlyScene extends Scene {
           const p = opened.parts[part];
           pos = phyllotaxis(inPart, opened.c, p.x, p.y);
           gr = opened.c * 0.4;
-          partDim = focusPart && p.name !== focusPart ? 0.3 : 1;
+          partLook = this.focal(focusPart ? p.name === focusPart : null);
+          // Breakdown: each part whirls in around its own centre, one part after another.
+          if (openingNow) t = { dur: 1100 + 300 * noise(g.id, 51), delay: 150 * part + 9 * inPart, spiral: { x: p.x, y: p.y, turn: (part % 2 ? 1 : -1) * 1.2 }, ease: "inOutSine" };
           inPart++;
+        } else if (closing === month) {
+          // Collapse: a short rewind back into the column, top rows first.
+          t = { dur: 760 + 200 * noise(g.id, 52), delay: 320 * (1 - k / Math.max(1, column.length)), bend: 0.05, ease: "outCubic" };
         }
-        e.place(g, { ...pos, color: palette.spend, alpha: 0.92, r: gr, dim: dim * partDim }, timing(kind, g, index++, total));
+        const slot = { order: (i + k / Math.max(1, column.length)) / 12, group: i, groups: 12, x: pos.x, y: pos.y, base: grid.baseY };
+        e.place(g, { ...pos, color: palette.spend, alpha: 0.92, r: gr, dim: look.dim * partLook.dim, lift: look.lift + partLook.lift }, t ?? this.flight(kind, g, slot, index, total));
+        index++;
       });
     });
 
@@ -122,7 +136,7 @@ export class MonthlyScene extends Scene {
       const focused = focusPart ? opened.parts.find((p) => p.name === focusPart) : null;
       if (focused) {
         const span = focused.r * 2.6 + 30;
-        e.frame({ x: focused.x - span / 2, y: focused.y - span / 2, w: span, h: span + 14 }, { max: 2.6, min: 1.2 });
+        this.focusCamera({ x: focused.x - span / 2, y: focused.y - span / 2, w: span, h: span + 14 }, { max: 2.6, min: 1.2 }, palette.spend);
       } else {
         // Frame the part clusters with their labels; the emptied column is only an outline now.
         const xs = opened.parts.flatMap((p) => [p.x - p.r, p.x + p.r]);
@@ -134,7 +148,7 @@ export class MonthlyScene extends Scene {
       let box = grid.columnBox(focusMonth - 1, counts[focusMonth - 1], 1);
       box = { x: box.x - grid.colW * 0.6, y: box.y - 16, w: box.w + grid.colW * 1.2, h: box.h + 34 };
       if (this.ghosts.has(focusMonth)) box = union(box, this.ghostBox(grid, focusMonth));
-      e.frame(box, { min: 1.15, max: 2.6, pad: 0.1 });
+      this.focusCamera(box, { min: 1.15, max: 2.6, pad: 0.1 }, palette.spend);
     } else {
       e.home();
     }
@@ -208,7 +222,6 @@ export class MonthlyScene extends Scene {
     const grid = this.grid;
     if (!grid) return;
     const e = this.engine;
-    const a = this.labelAlpha(now);
     const spending = this.env.facts.monthly_spending_jan_dec;
     const opened = this.opened;
     const focusMonth = typeof this.focusKey === "number" ? this.focusKey : opened?.month ?? null;
@@ -218,6 +231,7 @@ export class MonthlyScene extends Scene {
       const hit = month === focusMonth;
       const faded = (opened && !hit) || (focusMonth && !hit) ? 0.45 : 1;
       const name = short ? MONTHS[i][0] : MONTHS[i].slice(0, 3);
+      const a = this.labelAt(now, i, 12);
       e.label(ctx, name, grid.colX(i), grid.baseY, { color: hit ? theme.paper : theme.faint, alpha: a * faded, dy: 13, weight: hit ? 600 : 400 });
     }
     if (focusMonth && !opened) {
@@ -236,8 +250,7 @@ export class MonthlyScene extends Scene {
     }
     for (const [month, at] of this.ghosts) {
       const spot = this.ghostSpot(grid, month);
-      const ga = Math.min(1, Math.max(0, (now - at) / 700)) * (opened && opened.month !== month ? 0.2 : 1);
-      drawGhost(e, ctx, spot.x, spot.y, spot.n, spot.c, ga, spot.text);
+      drawGhost(e, ctx, spot.x, spot.y, spot.n, spot.c, now - at, spot.text, opened && opened.month !== month ? 0.2 : 1);
     }
   }
 }

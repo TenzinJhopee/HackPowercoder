@@ -1,7 +1,8 @@
 import type { Breakdown, SceneType } from "@/lib/contracts";
 import { swiss } from "@/components/format";
 import { theme } from "@/components/theme";
-import { clamp, noise, type Engine, type Grain, type SceneLayer, type Timing } from "../engine";
+import { FOCUS_SOFTEN, SETTLE, entranceTiming, focal, labelStagger, type Entrance, type FocusStyle, type Slot } from "../choreo";
+import { clamp, easeOutCubic, noise, palette, type Box, type Engine, type Grain, type RGB, type SceneLayer, type Timing } from "../engine";
 import { clusterRadius, phyllotaxis } from "../layout";
 
 /** The facts.json keys the world reads (plan section 4). */
@@ -50,6 +51,13 @@ export abstract class Scene implements SceneLayer {
   protected labelsAt = 0;
   /** When the last state change lands (labels that depend on focus or breakdown fade in after it). */
   protected changedAt = 0;
+  protected enteredAt = 0;
+  /** How grains arrive on `enter` (set by the world from the scene pair). */
+  entrance: Entrance | null = null;
+  /** Current focus look (set by the world on every new focus). */
+  focusStyle: FocusStyle = "zoom";
+  /** A new focus just happened: play its one-shot effects (ripple, carry) on the next layout. */
+  focusFx = false;
 
   constructor(protected env: SceneEnv) {}
 
@@ -64,10 +72,54 @@ export abstract class Scene implements SceneLayer {
   protected abstract layout(kind: ApplyKind): void;
 
   apply(kind: ApplyKind): void {
-    const settle = performance.now() + (this.engine.reduced ? 300 : SETTLE_MS[kind === "resize" ? "update" : kind]);
-    if (kind === "enter") this.labelsAt = settle;
+    const now = performance.now();
+    const enterMs = this.entrance ? SETTLE[this.entrance.name] : SETTLE_MS.enter;
+    const settle = now + (this.engine.reduced ? 300 : kind === "enter" ? enterMs : SETTLE_MS.update);
+    if (kind === "enter") {
+      this.labelsAt = settle;
+      this.enteredAt = now;
+      if (this.entrance?.name === "rewind") this.engine.breathe(0.07, 1300);
+    }
     if (kind !== "resize") this.changedAt = settle;
+    // Focus overlays are re-declared by focusCamera() during layout; anything not re-declared fades out.
+    this.engine.spot.aTo = 0;
     this.layout(kind);
+    this.focusFx = false;
+  }
+
+  /** Entrance choreography on `enter`, the calm default otherwise. */
+  protected flight(kind: ApplyKind, g: Grain, slot: Slot, index = 0, count = 1): Timing {
+    if (kind === "enter" && this.entrance) return entranceTiming(this.entrance, g, slot, this.engine);
+    return timing(kind, g, index, count);
+  }
+
+  /** Dim and lift for a focused (hit) or other grain; null when nothing is focused. */
+  protected focal(hit: boolean | null) {
+    return focal(this.focusStyle, hit);
+  }
+
+  /** Frame the focused item in the current look; on a new focus also play its one-shot effect and carry sparks. */
+  protected focusCamera(box: Box, opts: { min?: number; max?: number; pad?: number } = {}, color: RGB = palette.paper, carry = true): void {
+    const e = this.engine;
+    const style = this.focusStyle;
+    e.frame(box, { ...opts, soften: FOCUS_SOFTEN[style] });
+    const x = box.x + box.w / 2;
+    const y = box.y + box.h / 2;
+    const R = Math.max(box.w, box.h) / 2;
+    if (style === "spotlight") {
+      e.spot.x = x;
+      e.spot.y = y;
+      e.spot.r = R * 0.9 + 6;
+      e.spot.aTo = 1;
+    }
+    if (!this.focusFx) return;
+    if (style === "ripple") e.startRipple(x, y, R);
+    if (carry) e.carry(x, y, R, color);
+  }
+
+  /** Label i of n fades in as its grains arrive (follows the entrance order). */
+  protected labelAt(now: number, i: number, n: number): number {
+    return this.labelAlpha(now, labelStagger(this.entrance, i, n));
   }
 
   /** Returns false (no-op) for an unknown target. */
@@ -118,26 +170,50 @@ export abstract class Scene implements SceneLayer {
   }
 }
 
-/** Missing payment: a dashed coral outline holding empty grain rings (plan 6.3, e.g. February health insurance). */
-export function drawGhost(engine: Engine, ctx: CanvasRenderingContext2D, x: number, y: number, n: number, c: number, alpha: number, text: string) {
-  if (alpha < 0.01) return;
+/**
+ * Missing payment: a dashed coral outline holding empty grain rings (plan 6.3, e.g. February health insurance).
+ * Opens with an iris: a dashed circle widens from the missing item's spot, then the outline and its rings appear from the
+ * centre outward. `age` = ms since the ghost was set; `fade` multiplies everything.
+ */
+export function drawGhost(engine: Engine, ctx: CanvasRenderingContext2D, x: number, y: number, n: number, c: number, age: number, text: string, fade = 1) {
+  if (fade < 0.01 || age < 0) return;
+  if (engine.reduced) age += 2000;
   const outer = clusterRadius(n, c) + c * 0.9;
+  const iris = clamp(age / 1100, 0, 1);
+  const alpha = clamp((age - 450) / 650, 0, 1) * fade;
   engine.inWorld(ctx, (unit) => {
-    ctx.globalAlpha = alpha;
     ctx.strokeStyle = theme.coral;
     ctx.lineWidth = unit;
+    if (iris < 1) {
+      ctx.globalAlpha = 0.85 * Math.pow(1 - iris, 1.3) * Math.min(1, iris * 8) * fade;
+      ctx.setLineDash([4 * unit, 4 * unit]);
+      ctx.lineDashOffset = -age * 0.01 * unit;
+      ctx.beginPath();
+      ctx.arc(x, y, outer * (0.1 + 1.5 * easeOutCubic(iris)), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineDashOffset = 0;
+    }
+    if (alpha < 0.01) {
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      return;
+    }
+    ctx.globalAlpha = alpha;
     ctx.setLineDash([3 * unit, 3 * unit]);
     ctx.beginPath();
     ctx.arc(x, y, outer, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.globalAlpha = alpha * 0.75;
     for (let k = 0; k < n; k++) {
+      const ring = clamp((age - 650 - k * 45) / 300, 0, 1) * fade;
+      if (ring < 0.01) break;
+      ctx.globalAlpha = ring * 0.75;
       const p = phyllotaxis(k, c, x, y);
       ctx.beginPath();
       ctx.arc(p.x, p.y, c * 0.36, 0, Math.PI * 2);
       ctx.stroke();
     }
+    ctx.globalAlpha = 1;
   });
   engine.label(ctx, text, x, y - outer, { color: theme.coral, alpha, dy: -5, size: 11 });
 }

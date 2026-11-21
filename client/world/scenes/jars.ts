@@ -1,8 +1,8 @@
 import { swiss } from "@/components/format";
 import { theme } from "@/components/theme";
-import { noise, palette, type Box, type Grain } from "../engine";
-import { pick } from "../layout";
-import { Scene, timing, type ApplyKind } from "./base";
+import { noise, palette, type Box, type Grain, type Place, type Timing } from "../engine";
+import { phyllotaxis, pick } from "../layout";
+import { Scene, type ApplyKind } from "./base";
 
 const JARS = [
   { name: "3a", title: "Pillar 3a", aliases: ["pillar", "pillar 3a", "third pillar", "3rd pillar"] },
@@ -15,6 +15,10 @@ export class JarsScene extends Scene {
   readonly type = "jars" as const;
   private jars: (Box & { name: string; title: string })[] = [];
   private filledAt = new Map<string, number>();
+  /** Jars filled by fillJar() while this scene is on screen: they play the transformation (re-entries just show them full). */
+  private fresh = new Set<string>();
+  /** Grains already sent through the transformation chain (left alone while it plays). */
+  private chained = new Map<number, number>();
 
   targets() {
     return JARS.map((j) => j.name);
@@ -27,7 +31,10 @@ export class JarsScene extends Scene {
   fillJar(jar: string) {
     const name = jarName(jar);
     if (!name) return false;
-    if (!this.filledAt.has(name)) this.filledAt.set(name, performance.now());
+    if (!this.filledAt.has(name)) {
+      this.filledAt.set(name, performance.now());
+      this.fresh.add(name);
+    }
     return true;
   }
 
@@ -44,7 +51,7 @@ export class JarsScene extends Scene {
     // Fill grains: "Left over" grains first (that is the money that could go in), then any.
     const leftover = this.env.categories.findIndex((c) => c.saved);
     const pool = [...e.grains].sort((a, b) => Number(b.category === leftover) - Number(a.category === leftover) || a.id - b.id);
-    const inJar = new Map<number, { jar: Box; k: number }>();
+    const inJar = new Map<number, { jar: Box & { name: string }; k: number }>();
     filled.forEach((j, n) => {
       const jar = this.jars.find((x) => x.name === j.name)!;
       pool.slice(n * FILL, (n + 1) * FILL).forEach((g, k) => inJar.set(g.id, { jar, k }));
@@ -53,6 +60,9 @@ export class JarsScene extends Scene {
     const bandW = Math.min(w * 0.16, 80);
     const now = performance.now();
     const total = e.grains.length;
+    // Pour: the grains highest on screen now are poured first.
+    const byHeight = kind === "enter" ? new Map([...e.grains].sort((a, b) => a.y - b.y || a.id - b.id).map((g, r) => [g.id, r / total])) : null;
+    const look = this.focal(this.focusKey ? false : null);
     e.grains.forEach((g, i) => {
       const slot = inJar.get(g.id);
       if (slot) {
@@ -60,7 +70,13 @@ export class JarsScene extends Scene {
         const pitch = (jar.w * 0.78) / 6;
         const x = jar.x + jar.w / 2 + ((k % 6) - 2.5) * pitch + g.jx * pitch * 0.08;
         const y = jar.y + jar.h - pitch * 0.9 - Math.floor(k / 6) * pitch + g.jy * pitch * 0.08;
-        e.place(g, { x, y, color: palette.saved, alpha: 0.95, r: pitch * 0.4, dim: 1 }, { dur: 1300, delay: 60 * k, bend: 0.35 });
+        const final: Place = { x, y, color: palette.saved, alpha: 0.95, r: pitch * 0.4, dim: 1, lift: 0 };
+        const started = this.chained.get(g.id);
+        if (started !== undefined && kind !== "resize" && now - started < 5200) return; // transformation still playing
+        if (this.fresh.has(jar.name) && kind === "update" && started === undefined) {
+          this.chained.set(g.id, now);
+          e.place(g, ...transformation(jar, k, pitch, final, g));
+        } else e.place(g, final, { dur: 1300, delay: kind === "resize" ? 0 : 60 * k, bend: 0.35 });
         return;
       }
       const top = -8;
@@ -78,11 +94,12 @@ export class JarsScene extends Scene {
       const current = g.motion?.kind === "flow" && g.motion.speed === motion.speed ? g.motion : motion;
       const span = bottomY - top;
       const y = top + ((((current.offset + current.speed * ((now - current.since) / 1000)) % span) + span) % span);
-      e.place(g, { x: motion.x, y, color: palette.spend, alpha: 0.5, r: 1.3, dim: this.focusKey ? 0.5 : 1, motion }, timing(kind, g, i, total));
+      const order = byHeight?.get(g.id) ?? 0;
+      e.place(g, { x: motion.x, y, color: palette.spend, alpha: 0.5, r: 1.3, ...look, motion }, this.flight(kind, g, { order, group: 0, groups: 1, x: motion.x, y }, i, total));
     });
 
     const focused = this.jars.find((j) => j.name === this.focusKey);
-    if (focused) e.frame({ x: focused.x - focused.w * 0.4, y: focused.y - 30, w: focused.w * 1.8, h: focused.h + 50 }, { min: 1.2, max: 2.4 });
+    if (focused) this.focusCamera({ x: focused.x - focused.w * 0.4, y: focused.y - 30, w: focused.w * 1.8, h: focused.h + 50 }, { min: 1.2, max: 2.4 }, palette.saved);
     else e.home();
   }
 
@@ -92,7 +109,8 @@ export class JarsScene extends Scene {
     for (const jar of this.jars) {
       const filledAt = this.filledAt.get(jar.name);
       const full = filledAt !== undefined && this.env.filled.has(jar.name);
-      const fill = full ? Math.min(1, (now - filledAt) / 1800) : 0;
+      // A transformed fill lands later: the outline turns green once the grains are in.
+      const fill = full ? Math.min(1, Math.max(0, now - filledAt - (this.fresh.has(jar.name) && !e.reduced ? 2900 : 0)) / 1800) : 0;
       const hit = jar.name === this.focusKey;
       const pulse = hit && !e.reduced ? 0.7 + 0.3 * Math.sin(now / 520) : 1;
       e.inWorld(ctx, (unit) => {
@@ -114,6 +132,19 @@ export class JarsScene extends Scene {
       });
     }
   }
+}
+
+/**
+ * Dönüşüm: the fill grains first gather above the jar's mouth as coral "missing" dots, turn green one after another,
+ * then drop into the jar.
+ */
+function transformation(jar: Box, k: number, pitch: number, final: Place, g: Grain): [Place, Timing] {
+  const mouth = phyllotaxis(k, pitch * 0.62, jar.x + jar.w / 2, jar.y - pitch * 3.2);
+  const dot = { ...mouth, r: pitch * 0.36, alpha: 0.95, dim: 1, lift: 0 };
+  const drop: Timing = { dur: 900 + 200 * noise(g.id, 71), delay: 20 * k, via: { x: final.x, y: jar.y - pitch }, ease: "inOutQuad" };
+  const green: Timing = { dur: 520, delay: 200 + 25 * k, bend: 0, ease: "inOutSine", then: { place: final, timing: drop } };
+  const gather: Timing = { dur: 1000 + 200 * noise(g.id, 72), delay: 25 * k, bend: 0.3, ease: "inOutSine", then: { place: { ...dot, color: palette.saved, r: pitch * 0.48 }, timing: green } };
+  return [{ ...dot, color: palette.coral }, gather];
 }
 
 /** An open-topped jar with a slight lip and rounded base. */

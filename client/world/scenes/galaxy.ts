@@ -1,6 +1,6 @@
 import { noise, palette } from "../engine";
 import { GOLDEN_ANGLE } from "../layout";
-import { Scene, timing, type ApplyKind } from "./base";
+import { Scene, type ApplyKind } from "./base";
 
 /** Opening scene: the year's income as one slowly rotating phyllotaxis disc of paper grains. */
 export class GalaxyScene extends Scene {
@@ -42,18 +42,20 @@ export class GalaxyScene extends Scene {
       const current = g.motion?.kind === "orbit" ? g.motion : null;
       const angle = current ? current.angle + current.speed * ((now - current.since) / 1000) : k * GOLDEN_ANGLE + g.jy * 0.04;
       const motion = { kind: "orbit" as const, cx, cy, radius, angle, speed, since: now };
+      const x = cx + Math.cos(angle) * radius;
+      const y = cy + Math.sin(angle) * radius;
       this.engine.place(
         g,
         {
-          x: cx + Math.cos(angle) * radius,
-          y: cy + Math.sin(angle) * radius,
+          x,
+          y,
           color: palette.paper,
           alpha: 0.4 + 0.45 * noise(g.id, 20),
           r: c * 0.42,
           dim: 1,
           motion
         },
-        timing(kind, g, k, n)
+        this.flight(kind, g, { order: k / n, group: 0, groups: 1, x, y, cx, cy }, k, n)
       );
     });
     e.home();

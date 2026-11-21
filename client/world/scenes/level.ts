@@ -1,8 +1,8 @@
 import { swiss } from "@/components/format";
 import { theme } from "@/components/theme";
-import { palette, type Grain } from "../engine";
+import { clamp, easeInOutCubic, palette, type Grain } from "../engine";
 import { assignColumns, clusterRadius, columnGrid, phyllotaxis, type ColumnGrid } from "../layout";
-import { MONTHS, Scene, drawGhost, ghostFor, timing, toMonth, type ApplyKind } from "./base";
+import { MONTHS, Scene, drawGhost, ghostFor, toMonth, type ApplyKind } from "./base";
 import { union } from "./monthly";
 
 /** Month-end balance vs 1 January: green above the line, coral below; December's 13th salary in paper colour. */
@@ -67,13 +67,15 @@ export class LevelScene extends Scene {
       const value = this.values[i];
       const dir = value >= 0 ? 1 : -1;
       const month = i + 1;
-      const dim = typeof focus === "number" ? (month === focus ? 1 : 0.32) : out ? (month === 12 ? 1 : 0.32) : 1;
+      const look = this.focal(typeof focus === "number" ? month === focus : out ? month === 12 : null);
       column.forEach((g, k) => {
         const isPaper = month === 12 && k >= green;
         let pos = grid.slot(i, k, dir, g);
         if (isPaper && out) pos = phyllotaxis(k - green, c, this.thirteenth!.x, this.thirteenth!.y);
         const color = isPaper ? palette.paper : dir > 0 ? palette.saved : palette.coral;
-        e.place(g, { ...pos, color, alpha: 0.92, r, dim }, timing(kind, g, index++, total));
+        // Time flow: January first, each column from the start-of-year line outwards.
+        const slot = { order: (i + (0.6 * k) / Math.max(1, column.length)) / 12, group: i, groups: 12, x: pos.x, y: pos.y, base: grid.baseY };
+        e.place(g, { ...pos, color, alpha: 0.92, r, ...look }, this.flight(kind, g, slot, index++, total));
       });
     });
 
@@ -83,12 +85,12 @@ export class LevelScene extends Scene {
       const box = grid.columnBox(focus - 1, n, dir);
       let framed = { x: box.x - grid.colW * 0.6, y: box.y - 18, w: box.w + grid.colW * 1.2, h: box.h + 36 };
       if (this.ghosts.has(focus)) framed = union(framed, this.ghostBox(grid, focus));
-      e.frame(framed, { min: 1.15, max: 2.6 });
+      this.focusCamera(framed, { min: 1.15, max: 2.6 }, dir > 0 ? palette.saved : palette.coral);
     } else if (out && this.thirteenth) {
       const dec = grid.columnBox(11, counts[11], 1);
       const R = clusterRadius(paper, c);
       const t = this.thirteenth;
-      e.frame(union(dec, { x: t.x - R, y: t.y - R - 18, w: 2 * R, h: 2 * R + 36 }), { pad: 0.1 });
+      this.focusCamera(union(dec, { x: t.x - R, y: t.y - R - 18, w: 2 * R, h: 2 * R + 36 }), { pad: 0.1 }, palette.paper);
     } else {
       e.home();
     }
@@ -109,17 +111,20 @@ export class LevelScene extends Scene {
     return { x: s.x - s.R, y: s.y - s.R - 16, w: 2 * s.R, h: 2 * s.R + 16 };
   }
 
-  drawUnder(ctx: CanvasRenderingContext2D) {
+  drawUnder(ctx: CanvasRenderingContext2D, now: number) {
     const grid = this.grid;
     if (!grid) return;
     const e = this.engine;
+    // On a time-flow entrance the start-of-year line is drawn left to right as the months arrive.
+    const drawn = this.entrance?.name === "rise" && !e.reduced ? easeInOutCubic(clamp((now - this.enteredAt) / 1500, 0, 1)) : 1;
+    if (drawn <= 0) return;
     e.inWorld(ctx, (unit) => {
       ctx.globalAlpha = 0.6;
       ctx.strokeStyle = theme.faint;
       ctx.lineWidth = unit;
       ctx.beginPath();
       ctx.moveTo(grid.margin * 0.5, grid.baseY);
-      ctx.lineTo(e.width - grid.margin * 0.5, grid.baseY);
+      ctx.lineTo(grid.margin * 0.5 + (e.width - grid.margin) * drawn, grid.baseY);
       ctx.stroke();
       ctx.globalAlpha = 1;
     });
@@ -138,7 +143,7 @@ export class LevelScene extends Scene {
       const month = i + 1;
       const hit = month === focusMonth;
       const name = short ? MONTHS[i][0] : MONTHS[i].slice(0, 3);
-      e.label(ctx, name, grid.colX(i), grid.labelY, { color: hit ? theme.paper : theme.faint, alpha: a * (focusMonth && !hit ? 0.45 : 1), weight: hit ? 600 : 400 });
+      e.label(ctx, name, grid.colX(i), grid.labelY, { color: hit ? theme.paper : theme.faint, alpha: this.labelAt(now, i, 12) * (focusMonth && !hit ? 0.45 : 1), weight: hit ? 600 : 400 });
     }
     if (typeof focus === "number") {
       const value = this.values[focus - 1];
@@ -157,7 +162,7 @@ export class LevelScene extends Scene {
     }
     for (const [month, at] of this.ghosts) {
       const s = this.ghostSpot(grid, month);
-      drawGhost(e, ctx, s.x, s.y, s.n, s.c, Math.min(1, Math.max(0, (now - at) / 700)), s.text);
+      drawGhost(e, ctx, s.x, s.y, s.n, s.c, now - at, s.text);
     }
   }
 }
