@@ -44,6 +44,8 @@ export function AdvisorShell() {
       {advisor.offer && <OfferCard confirmed={advisor.offerConfirmed} onConfirm={advisor.confirmOffer} />}
       <Chips
         mode={advisor.mode}
+        question={advisor.question}
+        onAnswer={advisor.answer}
         onStart={advisor.start}
         onSay={advisor.say}
         onResume={advisor.resume}

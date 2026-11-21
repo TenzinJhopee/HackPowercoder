@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Conversation, Voice, isBackupMode, type EngineEvent, type VoiceStatus } from "@/client";
-import type { Beat, ConversationMode, Figure, Snapshot } from "@/lib/contracts";
+import type { Beat, BeatQuestion, ConversationMode, Figure, Snapshot } from "@/lib/contracts";
 import { MAIN, SIDE_ANSWERS } from "@/content/scripts";
 import { GrainWorld } from "@/client/world/grain-world";
 import type { CaptionLine } from "./caption";
@@ -30,6 +30,7 @@ type State = {
   playing: PlayingScript | null;
   offer: Beat | null;
   offerConfirmed: boolean;
+  question: BeatQuestion | null;
   error: string | null;
 };
 
@@ -43,6 +44,7 @@ const initialState: State = {
   playing: null,
   offer: null,
   offerConfirmed: false,
+  question: null,
   error: null
 };
 
@@ -76,6 +78,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, snapshot: event.snapshot };
     case "script":
       return { ...state, playing: { kind: event.kind, script: event.script, source: event.source } };
+    case "question":
+      return { ...state, question: event.question };
     case "error":
       return { ...state, error: event.message };
     default:
@@ -127,6 +131,8 @@ export function useAdvisor() {
   }, [backup, world]);
 
   const start = useCallback(() => {
+    // Synchronously inside the tap: unlock audio and speech for iOS Safari before any await.
+    voice.current?.unlock();
     world.reset();
     dispatch({ type: "reset" });
     void engine.current?.start();
@@ -135,6 +141,7 @@ export function useAdvisor() {
   /** Any typed, spoken or chip text; the engine classifies it (continue / wait / end / question). */
   const say = useCallback((text: string) => void engine.current?.input(text), []);
   const resume = useCallback(() => void engine.current?.resume(), []);
+  const answer = useCallback((id: string) => void engine.current?.answer(id), []);
   const confirmOffer = useCallback(() => {
     engine.current?.confirmOffer(OFFER_JAR, OFFER_FIGURE);
     dispatch({ type: "confirmed" });
@@ -154,6 +161,7 @@ export function useAdvisor() {
     playing: state.playing,
     offer: state.offer,
     offerConfirmed: state.offerConfirmed,
+    question: state.question,
     error: state.error,
     world,
     sound,
@@ -162,6 +170,7 @@ export function useAdvisor() {
     interrupt,
     say,
     resume,
+    answer,
     confirmOffer,
     setSound
   };

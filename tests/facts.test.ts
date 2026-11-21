@@ -30,3 +30,22 @@ test("a user answer resolves the question and updates the pot", () => {
   // Without the duplicate the Mondrian stay (743.20) is below the one-off threshold, so it leaves the pot.
   assert.equal(byId(facts, "one_off_pot")?.figures.monthlyPot, 1921.17);
 });
+
+test("completeness and tax are asked, then resolved by a note", () => {
+  const facts = buildFacts(transactions, "CHF");
+  assert.equal(byId(facts, "accounts_complete")?.mode, "ask");
+  assert.deepEqual(byId(facts, "accounts_complete")?.answers, ["has_other", "complete"]);
+  const tax = byId(facts, "tax_provision");
+  assert.equal(tax?.mode, "ask");
+  assert.deepEqual([tax?.figures.taxPayments, tax?.figures.taxPaid, tax?.figures.yearlyIncome], [3, 630, 97032]);
+  assert.ok(facts.assumptions.some((a) => a.includes("upper bound")));
+  assert.equal(facts.affordReplay?.example[5].belowLowestPoint, 3000);
+  const answered = buildFacts(transactions, "CHF", undefined, [
+    { subject: "accounts_complete", answer: "complete", text: "No, this is everything", createdAt: "2025-12-31" },
+    { subject: "tax_provision", answer: "not_yet", text: "No, not yet", createdAt: "2025-12-31" }
+  ]);
+  assert.equal(byId(answered, "accounts_complete")?.mode, "resolved");
+  assert.equal(byId(answered, "tax_provision")?.userAnswer, "not_yet");
+  assert.ok(!answered.openQuestions.some((q) => q.subject === "tax_provision" || q.subject === "accounts_complete"));
+  assert.ok(!answered.assumptions.some((a) => a.includes("upper bound")));
+});

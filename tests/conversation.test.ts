@@ -82,8 +82,66 @@ test("interrupt, ask, resume: fast path focus, bridge, replay of the interrupted
   assert.equal(talk.mode, "finished");
 });
 
+test("question beat: pause, answer, save note (offline), continue, offer skipped", async () => {
+  const log: string[] = [];
+  const world = new StubWorld({ log });
+  const voice = new FakeVoice(log, () => false);
+  const notes: string[] = [];
+  const offline = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    notes.push(`${String(input)} ${String(init?.body)}`);
+    throw new TypeError("offline");
+  }) as typeof fetch;
+  const script: Script = [
+    { say: "Here is your whole year at a glance.", scene: { type: "galaxy" } },
+    {
+      say: "Do you keep a pillar 3a account elsewhere?",
+      scene: { type: "jars" },
+      question: {
+        subject: "no_pillar_3a",
+        answers: [
+          { id: "has_elsewhere", label: "Yes, at another bank", kind: "yes", skipOffer: true },
+          { id: "none", label: "No, I have none", kind: "no" },
+        ],
+      },
+    },
+    { say: "If you like, 200 francs a month into pillar 3a.", scene: { type: "jars" }, offer: true },
+    { say: "That was your year.", scene: { type: "galaxy" } },
+  ];
+  const talk = new Conversation({ world, voice, main: script, fetch: offline, backup: true });
+  const offers: unknown[] = [];
+  talk.on((event) => event.type === "offer" && offers.push(event));
+
+  await talk.start();
+  assert.equal(talk.mode, "answering");
+  assert.ok(!log.includes(`say:${script[2].say}`));
+
+  assert.equal(talk.input("Yes, from my other account"), "continue");
+  await until(() => talk.mode === "finished");
+  assert.equal(notes.length, 1);
+  assert.ok(notes[0].startsWith("/api/notes ") && notes[0].includes('"subject":"no_pillar_3a"') && notes[0].includes('"answer":"has_elsewhere"'));
+  assert.ok(!log.includes(`say:${script[2].say}`), "offer beat skipped");
+  assert.equal(offers.length, 0, "no offer card");
+  assert.ok(log.includes(`say:${script[3].say}`));
+
+  // "No" keeps the offer.
+  const again = new Conversation({ world, voice, main: script, fetch: offline, backup: true });
+  await again.start();
+  again.input("No");
+  await until(() => again.mode === "finished");
+  assert.ok(log.filter((l) => l === `say:${script[2].say}`).length === 1, "offer beat played after no");
+});
+
 test("intent rules", () => {
   assert.equal(classify("OK, let's continue"), "continue");
+  assert.equal(classify("I'm not sure about this"), "question");
+  assert.equal(classify("yeah"), "continue");
+  assert.equal(classify("yep"), "continue");
+  assert.equal(classify("next"), "continue");
+  assert.equal(classify("go ahead"), "continue");
+  assert.equal(classify("stop please"), "wait");
+  assert.equal(classify("hang on"), "wait");
+  assert.equal(classify("pause"), "wait");
+  assert.equal(classify("Wait, why is September so high?"), "question");
   assert.equal(classify("why was November high?"), "question");
   assert.equal(monthIn("why was November high?"), 11);
   assert.equal(monthIn("May I ask something"), null);

@@ -88,6 +88,9 @@ export function estimateTimings(text: string, msPerChar = 60): WordTiming[] {
 /** Start time (s) of each text word, taken from measured timings (matched by character offset, then by index). */
 export function wordStarts(words: TextWord[], timings: WordTiming[]): number[] {
   if (timings.length === words.length) return timings.map((t) => t.start);
+  // No timings at all: estimated starts, so cues do not all fire at t=0.
+  if (!timings.length) return estimateTimings(words.map((w) => w.word).join(" ")).map((t) => t.start);
+  // Different word counts: keep the measured times, matched by character offset.
   const starts: number[] = [];
   let last = 0;
   for (const w of words) {
@@ -97,6 +100,12 @@ export function wordStarts(words: TextWord[], timings: WordTiming[]): number[] {
   }
   return starts;
 }
+
+/** Watchdog for a started line: expected length plus a margin, in ms. */
+const watchdogMs = (expectedSeconds: number) => (Math.max(expectedSeconds, 1) * 1.5 + 3) * 1000;
+
+/** A tiny silent WAV, played once inside the Start tap to unlock the shared audio element (iOS Safari). */
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 
 type Clip = { src: string; timings: WordTiming[] };
 
@@ -114,6 +123,10 @@ export class Voice implements Speaker {
   private manifest: Promise<VoiceManifest> | null = null;
   private line = 0;
   private audio: HTMLAudioElement | null = null;
+  /** One element for every line (created in unlock(), inside the user's tap), so iOS keeps the permission. */
+  private shared: HTMLAudioElement | null = null;
+  /** Silences the current line without ending it (Sound off mid-line). */
+  private silence: (() => void) | null = null;
   private settle: ((completed: boolean) => void) | null = null;
   private liveAbort: AbortController | null = null;
   private state: VoiceStatus;
@@ -158,8 +171,31 @@ export class Voice implements Speaker {
 
   /** Sound button: muted lines still run the clock (with measured timings when pre-generated). */
   setMuted(muted: boolean): void {
-    if (muted) this.stop();
+    // Sound off mid-line: the line keeps its clock (captions and cues continue). Sound on applies from the next line.
+    if (muted) this.silence?.();
     this.update({ muted });
+  }
+
+  /**
+   * Call synchronously inside the Start tap handler. Creates and unlocks the shared audio element and primes
+   * speechSynthesis, so later lines (started after awaited fetches) may still play on iOS Safari.
+   */
+  unlock(): void {
+    if (typeof Audio !== "undefined" && !this.shared) {
+      const el = new Audio();
+      el.src = SILENT_WAV;
+      el.play().then(() => el.pause(), () => undefined);
+      this.shared = el;
+    }
+    if (this.state.browser) {
+      try {
+        const primer = new SpeechSynthesisUtterance("");
+        primer.volume = 0;
+        window.speechSynthesis.speak(primer);
+      } catch {
+        // Priming is best effort.
+      }
+    }
   }
 
   /** Loads the manifest and warms the HTTP cache for the given lines. Same-origin static files only. */
@@ -178,9 +214,13 @@ export class Voice implements Speaker {
     this.line++;
     this.liveAbort?.abort();
     this.liveAbort = null;
+    this.silence = null;
     if (this.audio) {
-      this.audio.pause();
-      this.audio.src = "";
+      const audio = this.audio;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+      if (audio !== this.shared) audio.src = "";
       this.audio = null;
     }
     if (this.state.browser) window.speechSynthesis.cancel();
@@ -212,11 +252,12 @@ export class Voice implements Speaker {
         const starts = wordStarts(words, clip.timings);
         const end = clip.timings.length ? clip.timings[clip.timings.length - 1].end : 0;
         if (!this.state.muted) {
-          const played = await this.playAudio(line, clip.src, starts, fireUpTo, finishAll);
+          const played = await this.playAudio(line, clip.src, starts, end, fireUpTo, finishAll);
           if (played !== null) return this.used("pregen", played);
           if (!alive()) return false;
         }
-        return this.used("silent", await this.runClock(line, starts, end, fireUpTo, finishAll));
+        const clockEnd = end || (starts.length ? starts[starts.length - 1] + 0.5 : 0.3);
+        return this.used("silent", await this.runClock(line, starts, clockEnd, fireUpTo, finishAll));
       }
 
       // (b) Live TTS, never in backup mode.
@@ -225,8 +266,10 @@ export class Voice implements Speaker {
         if (!alive()) return false;
         if (payload?.audioBase64) {
           const src = `data:${payload.mimeType ?? "audio/mpeg"};base64,${payload.audioBase64}`;
-          const starts = wordStarts(words, payload.words);
-          const played = await this.playAudio(line, src, starts, fireUpTo, finishAll);
+          const timings = payload.words ?? [];
+          const starts = wordStarts(words, timings);
+          const end = timings.length ? timings[timings.length - 1].end : (estimateTimings(text).at(-1)?.end ?? 0);
+          const played = await this.playAudio(line, src, starts, end, fireUpTo, finishAll);
           if (played !== null) return this.used("live", played);
           if (!alive()) return false;
         }
@@ -322,19 +365,39 @@ export class Voice implements Speaker {
   }
 
   /** Resolves true/false like speak(); null when the audio could not start (caller falls back). */
-  private playAudio(line: number, src: string, starts: number[], fireUpTo: (i: number) => void, finishAll: () => void): Promise<boolean | null> {
+  private playAudio(line: number, src: string, starts: number[], end: number, fireUpTo: (i: number) => void, finishAll: () => void): Promise<boolean | null> {
     if (typeof Audio === "undefined") return Promise.resolve(null);
-    const audio = new Audio(src);
+    const audio = this.shared ?? new Audio();
+    // Sound may have been switched off while the clip was being fetched.
+    audio.muted = this.state.muted;
+    audio.src = src;
     this.audio = audio;
     return new Promise<boolean | null>((resolve) => {
       let started = false;
       let done = false;
+      let watchdog: ReturnType<typeof setTimeout> | undefined;
       const finish = (value: boolean | null) => {
         if (done) return;
         done = true;
+        clearTimeout(watchdog);
+        if (this.silence === silence) this.silence = null;
         if (this.settle === settle) this.settle = null;
         resolve(value);
       };
+      // A started line always ends: a stalled clip, an error after start or a missing `ended` settle as completed.
+      const complete = () => {
+        if (this.line !== line) return;
+        finishAll();
+        if (this.audio === audio) {
+          audio.pause();
+          this.audio = null;
+        }
+        finish(true);
+      };
+      const silence = () => {
+        audio.muted = true;
+      };
+      this.silence = silence;
       const settle = (completed: boolean) => finish(completed);
       this.settle = settle;
       const tick = () => {
@@ -345,19 +408,18 @@ export class Voice implements Speaker {
         fireUpTo(i);
         raf(tick);
       };
-      audio.onended = () => {
-        if (this.line !== line) return;
-        finishAll();
-        if (this.audio === audio) this.audio = null;
-        finish(true);
-      };
+      audio.onended = complete;
       audio.onerror = () => {
-        if (this.line === line && !started) finish(null);
+        if (this.line !== line) return;
+        if (started) complete();
+        else finish(null);
       };
       audio
         .play()
         .then(() => {
+          if (done || this.line !== line) return;
           started = true;
+          watchdog = setTimeout(complete, watchdogMs(end || (starts.length ? starts[starts.length - 1] : 0)));
           raf(tick);
         })
         .catch(() => {
@@ -417,15 +479,39 @@ export class Voice implements Speaker {
       let started = false;
       let boundaries = false;
       let t0 = 0;
+      let muted = false;
+      let endWatchdog: ReturnType<typeof setTimeout> | undefined;
       const finish = (value: boolean | null) => {
         if (done) return;
         done = true;
         clearTimeout(watchdog);
+        clearTimeout(endWatchdog);
+        if (this.silence === silence) this.silence = null;
         if (this.settle === settle) this.settle = null;
         resolve(value);
       };
       const settle = (completed: boolean) => finish(completed);
       this.settle = settle;
+      const expected = (estimateTimings(text).at(-1)?.end ?? 0.3) / utterance.rate;
+      const complete = () => {
+        if (done || this.line !== line) return;
+        finishAll();
+        finish(true);
+      };
+      // Sound off mid-line: cancel the speech, keep the estimated clock running to the end of the line.
+      const silence = () => {
+        if (done || muted) return;
+        muted = true;
+        const ticking = started && !boundaries;
+        if (!started) t0 = now();
+        started = true;
+        boundaries = false;
+        if (!ticking) raf(tick);
+        synth.cancel();
+        clearTimeout(endWatchdog);
+        endWatchdog = setTimeout(complete, Math.max(0, (expected + 0.3) * 1000 - (now() - t0)));
+      };
+      this.silence = silence;
       // Chrome sometimes never starts an utterance; fall through to the clock.
       const watchdog = setTimeout(() => {
         if (!started && this.line === line) {
@@ -442,23 +528,24 @@ export class Voice implements Speaker {
         raf(tick);
       };
       utterance.onstart = () => {
+        if (muted) return;
         started = true;
         t0 = now();
+        endWatchdog = setTimeout(complete, watchdogMs(expected));
         raf(tick);
       };
       utterance.onboundary = (event) => {
-        if (this.line !== line || (event.name && event.name !== "word")) return;
+        if (muted || this.line !== line || (event.name && event.name !== "word")) return;
         boundaries = true;
         let i = -1;
         while (i + 1 < words.length && words[i + 1].charStart <= event.charIndex) i++;
         fireUpTo(i);
       };
       utterance.onend = () => {
-        if (this.line !== line) return;
-        finishAll();
-        finish(true);
+        if (!muted) complete();
       };
       utterance.onerror = (event) => {
+        if (muted) return;
         if (this.line !== line || event.error === "interrupted" || event.error === "canceled") return finish(false);
         if (started) finishAll();
         finish(started ? true : null);

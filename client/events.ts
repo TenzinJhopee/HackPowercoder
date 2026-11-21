@@ -1,4 +1,4 @@
-import type { Beat, ConversationMode, Cue, DirectorResponse, Figure, Script, Snapshot } from "@/lib/contracts";
+import type { Beat, BeatQuestion, ConversationMode, Cue, DirectorResponse, Figure, Script, Snapshot } from "@/lib/contracts";
 
 /** What a spoken line is, for the step bar and caption colour. */
 export type LineKind = "main" | "side" | "bridge" | "filler" | "failure";
@@ -22,6 +22,8 @@ export type EngineEvent =
   | { type: "snapshot"; snapshot: Snapshot | null }
   /** A script started playing (for the script panel). */
   | { type: "script"; kind: "main" | "side"; script: Script; source?: DirectorResponse["source"] }
+  /** A main beat asked the user (show its answers as chips); null when it is answered or dropped. */
+  | { type: "question"; question: BeatQuestion | null }
   | { type: "error"; message: string };
 
 export type EngineListener = (event: EngineEvent) => void;

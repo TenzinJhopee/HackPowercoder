@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import { MAIN, SIDE_ANSWERS, allLines, FIXED_LINES } from "../content/scripts";
+import { AFFORD_EXAMPLE, MAIN, SIDE_ANSWERS, allLines, FIXED_LINES, sideScripts } from "../content/scripts";
 import { cardStatusAsOf } from "../lib/card-cycle";
 import { audioKey } from "../lib/contracts";
 import { allowedNumbers, buildFacts, type FactsSummary } from "../lib/facts";
@@ -67,15 +67,15 @@ const numbersIn = (text: string) =>
   (text.replace(/\b\d+(st|nd|rd|th|a)\b/gi, "").match(/\d[\d,']*(?:\.\d+)?/g) ?? []).map((t) => Number(t.replace(/[,']/g, "")));
 
 test("scripts: shape, tone limits and bridges", () => {
-  assert.equal(MAIN.length, 8);
+  assert.equal(MAIN.length, 10);
   assert.ok(MAIN.every((b) => b.bridge), "every main beat has a bridge");
   assert.equal(MAIN.at(-1)?.offer, true);
   assert.equal(MAIN.filter((b) => b.offer).length, 1);
   const mainText = MAIN.map((b) => b.say).join(" ");
   for (const month of ["June", "July", "October", "December"]) assert.ok(mainText.includes(month), month);
   assert.ok(!/sept/i.test(MAIN.map((b) => `${b.say} ${b.bridge}`).join(" ")), "main script must not mention September");
-  assert.equal(MAIN[2].bridge, "Picking up where we left off: the summer months.");
-  const beats = [...MAIN, ...SIDE_ANSWERS.flatMap((a) => a.script)];
+  assert.equal(MAIN[3].bridge, "Picking up where we left off: the summer months.");
+  const beats = [...MAIN, ...SIDE_ANSWERS.flatMap((a) => sideScripts(a).flat())];
   for (const beat of beats) {
     assert.ok(words(beat.say).length <= 18, `too long: ${beat.say}`);
     assert.ok((beat.cues?.length ?? 0) <= 2, beat.say);
@@ -86,16 +86,19 @@ test("scripts: shape, tone limits and bridges", () => {
       assert.ok(index > 0, `cue word "${cue.word}" must appear and not be first in: ${beat.say}`);
     }
   }
-  for (const answer of SIDE_ANSWERS) assert.ok(answer.script.length >= 2 && answer.script.length <= 4);
+  for (const script of SIDE_ANSWERS.flatMap(sideScripts)) assert.ok(script.length >= 2 && script.length <= 4);
+  assert.equal(SIDE_ANSWERS.find((a) => a.match(AFFORD_EXAMPLE))?.id, "afford");
+  assert.equal(SIDE_ANSWERS.find((a) => a.match("Can I afford it in June?"))?.id, "afford");
   assert.ok(SIDE_ANSWERS.find((a) => a.id === "september")?.match("Wait, why is September so high?"));
   assert.ok(SIDE_ANSWERS.find((a) => a.id === "november")?.match("Why was November high?"));
   assert.ok(!SIDE_ANSWERS.some((a) => a.match("what about my savings?")));
 });
 
 test("scripts: every number exists in facts.json", () => {
-  const allowed = allowedNumbers(facts as unknown as FactsSummary);
+  // The daily balance series is input for lib/afford.ts, not something the advisor says.
+  const allowed = allowedNumbers({ ...facts, private_balance_daily: [] } as unknown as FactsSummary);
   const texts = [...allLines()];
-  for (const beat of [...MAIN, ...SIDE_ANSWERS.flatMap((a) => a.script)]) {
+  for (const beat of [...MAIN, ...SIDE_ANSWERS.flatMap((a) => sideScripts(a).flat())]) {
     for (const cue of beat.cues ?? []) if (cue.figure) assert.ok(allowed.has(cue.figure.value), `cue figure ${cue.figure.value}`);
     if (beat.figure) assert.ok(allowed.has(beat.figure.value), `figure ${beat.figure.value}`);
     for (const part of beat.scene?.breakdown?.parts ?? []) assert.ok(allowed.has(part.value));

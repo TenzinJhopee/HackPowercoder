@@ -35,7 +35,14 @@ export type Beat = {
   offer?: boolean;
   /** Main beats only: said when resuming at this beat after an interruption. */
   bridge?: string;
+  /** Main beats only: the line asks the user; the conversation waits in `answering` until one of these is chosen. */
+  question?: BeatQuestion;
 };
+
+/** `subject` is the facts insight id the answer is saved under (POST /api/notes). */
+export type BeatQuestion = { subject: string; answers: BeatAnswer[] };
+/** `id` is the machine answer saved in notes; `kind` matches spoken "yes"/"no" replies; `skipOffer` skips the offer beat. */
+export type BeatAnswer = { id: string; label: string; kind: "yes" | "no"; skipOffer?: boolean };
 
 export type Script = Beat[];
 
@@ -60,7 +67,7 @@ export interface World {
 
 // ---------- 3.3 Conversation states ----------
 
-export type ConversationMode = "idle" | "presenting" | "listening" | "side" | "waiting" | "returning" | "finished";
+export type ConversationMode = "idle" | "presenting" | "listening" | "side" | "waiting" | "answering" | "returning" | "finished";
 export type Intent = "continue" | "wait" | "end" | "question";
 
 // ---------- 3.4 Snapshot ----------
@@ -115,6 +122,15 @@ export type DirectorResponse = { script: Script; source: "model" | "prepared" | 
 /** Spoken when the director fails; then the conversation goes to `waiting`. */
 export const DIRECTOR_FAILURE_LINE = "I could not put an answer together right now.";
 /** Spoken while the director works on an unprepared question. */
-export const FILLER_LINE = "Let me check.";
+/** Spoken while the director is working; rotated so the same one is never heard twice in a row. */
+export const FILLER_LINES = [
+  "Let me check.",
+  "One moment, I am looking at that.",
+  "Good question, give me a second.",
+  "Let me look at your numbers.",
+  "I will pull that up.",
+  "Just a moment."
+] as const;
+export const FILLER_LINE = FILLER_LINES[0];
 /** Spoken on resume when the interrupted beat has no bridge. */
 export const DEFAULT_BRIDGE = "Where were we.";

@@ -1,4 +1,4 @@
-import type { Intent } from "@/lib/contracts";
+import type { BeatAnswer, Intent } from "@/lib/contracts";
 import { normalizeWord } from "../player/voice";
 
 const MONTH_NAMES = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
@@ -66,13 +66,38 @@ export function targetIn(text: string, targets: (string | number)[], current: st
   return null;
 }
 
-/** Plan 8.3: rules first. `targets` = the current scene's focus targets (categories count as a question). */
+const CONTINUE_START = /^(continue|go on|go ahead|carry on|ok|okay|sure|got it|yes|yeah|yep|yup|resume|keep going|next|alright|all right|fine|let'?s (continue|go on|move on|keep going))\b/;
+const CONTINUE_SHORT = /\b(continue|go on|go ahead|carry on|keep going|resume|next|move on)\b/;
+const WAIT_START = /^(wait|stop|pause|hold on|hang on|one more|another question|i have a question|just a (moment|second|sec))\b/;
+const WAIT_SHORT = /\b(wait|stop|pause|hold on|hang on)\b/;
+const END_START = /^(enough|end|quit|that'?s all|that'?s it|finish|i'?m done|bye|goodbye)\b/;
+
+/**
+ * Plan 8.3: rules first. `targets` = the current scene's focus targets (categories count as a question).
+ * Continue / wait / end words count when they open the utterance, or anywhere in a short one (4 words or fewer),
+ * so "I'm not sure about this" stays a question.
+ */
 export function classify(text: string, targets: (string | number)[] = []): Intent {
   const t = lower(text).trim().replace(/[.!,;]+$/, "");
   const categoryIn = targets.some((x) => typeof x === "string") && targetIn(t, targets.filter((x) => typeof x === "string")) !== null;
   const isQuestion = /\?/.test(t) || monthIn(t) !== null || categoryIn || /\b(why|how|what|which|when|explain)\b/.test(t);
-  if (!isQuestion && /\b(continue|go on|carry on|ok|okay|sure|got it|yes|resume|keep going)\b/.test(t)) return "continue";
-  if (!isQuestion && /(one more|another question|i have a question|^wait|^stop$|hold on)/.test(t)) return "wait";
-  if (!isQuestion && /^(enough|end|quit|that'?s all|finish)/.test(t)) return "end";
+  if (isQuestion) return "question";
+  const short = t.split(/\s+/).filter(Boolean).length <= 4;
+  if (WAIT_START.test(t) || (short && WAIT_SHORT.test(t)) || /\b(one more|another) question\b/.test(t)) return "wait";
+  if (END_START.test(t)) return "end";
+  if (CONTINUE_START.test(t) || (short && CONTINUE_SHORT.test(t))) return "continue";
   return "question";
+}
+
+/** Reply to a question beat: the answer whose label it is, else a yes/no style match. null = not an answer. */
+export function matchAnswer(text: string, answers: BeatAnswer[]): BeatAnswer | null {
+  const t = lower(text).trim().replace(/[.!?,;]+$/, "");
+  const exact = answers.find((a) => lower(a.label) === t || a.id === t);
+  if (exact) return exact;
+  const no = /^(no|nope|nah|not really|never|none|i don'?t|i do not|it wasn'?t|it was not|i haven'?t|i have not)\b/.test(t);
+  const yes =
+    /^(yes|yeah|yep|yup|sure|correct|right|exactly|indeed|of course|i do|it was|i have)\b/.test(t) ||
+    /\b(elsewhere|another (bank|account)|other (bank|account)|different (bank|account)|separate account)\b/.test(t);
+  const kind = no ? "no" : yes ? "yes" : null;
+  return kind ? (answers.find((a) => a.kind === kind) ?? null) : null;
 }

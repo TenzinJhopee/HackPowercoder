@@ -1,7 +1,8 @@
+import { BACKUP_NO_ANSWER_LINE, OFFER_CONFIRMED_LINE } from "@/content/scripts";
 import {
   DEFAULT_BRIDGE,
   DIRECTOR_FAILURE_LINE,
-  FILLER_LINE,
+  FILLER_LINES,
   type ConversationMode,
   type DirectorRequest,
   type DirectorResponse,
@@ -15,9 +16,10 @@ import {
 import { Emitter, type EngineListener } from "../events";
 import { Player } from "../player/player";
 import { isBackupMode, type Speaker } from "../player/voice";
-import { classify, targetIn } from "./intent";
+import { classify, matchAnswer, targetIn } from "./intent";
 
-export type PreparedAnswer = { match: (question: string) => boolean; script: Script };
+/** `script` may be built from the question (e.g. the amount in "Can I afford ...?"); no network either way. */
+export type PreparedAnswer = { match: (question: string) => boolean; script: Script | ((question: string) => Script) };
 
 export type ConversationOptions = {
   world: World;
@@ -29,6 +31,8 @@ export type ConversationOptions = {
   fetch?: typeof fetch;
   /** Default "/api/director". */
   directorUrl?: string;
+  /** Answers to question beats are saved here. Default "/api/notes". */
+  notesUrl?: string;
   /** Director timeout in ms. Default 12000. */
   directorTimeoutMs?: number;
   /** The data the current scene shows, sent as ScreenContext.visible. */
@@ -47,6 +51,7 @@ export class Conversation {
   private readonly prepared: PreparedAnswer[];
   private readonly fetcher: typeof fetch;
   private readonly directorUrl: string;
+  private readonly notesUrl: string;
   private readonly directorTimeoutMs: number;
   private readonly visible?: () => unknown;
   private readonly events = new Emitter();
@@ -59,6 +64,14 @@ export class Conversation {
   mainIndex = 0;
   /** The main script played to its end (a later "continue" has nothing to resume). */
   private mainDone = false;
+  /** Main beat index whose question waits for an answer (mode `answering`). */
+  private asking: number | null = null;
+  /** The user already has what the offer is for: offer beats are skipped. */
+  private skipOffer = false;
+  /** The offer card was tapped while a line played: say the confirmation once that flow ends. */
+  private confirmPending = false;
+  /** Next filler line; rotates so consecutive questions sound different. */
+  private fillerIndex = 0;
 
   constructor(options: ConversationOptions) {
     this.world = options.world;
@@ -67,6 +80,7 @@ export class Conversation {
     this.backup = options.backup ?? isBackupMode();
     this.fetcher = options.fetch ?? ((input, init) => fetch(input, init));
     this.directorUrl = options.directorUrl ?? "/api/director";
+    this.notesUrl = options.notesUrl ?? "/api/notes";
     this.directorTimeoutMs = options.directorTimeoutMs ?? 12000;
     this.visible = options.visible;
     this.player = new Player({ world: options.world, voice: options.voice, emit: this.events.emit });
@@ -80,7 +94,25 @@ export class Conversation {
   /** Start (or start over) the main script from beat 1. */
   start(): Promise<void> {
     this.setSnapshot(null);
+    this.setAsking(null);
+    this.skipOffer = false;
     return this.playMain(0);
+  }
+
+  /** Answer chip or matched reply to a question beat: save it (best effort), then continue the main script. */
+  answer(id: string): Promise<void> {
+    const index = this.asking;
+    const question = index !== null ? this.main[index]?.question : undefined;
+    const chosen = question?.answers.find((a) => a.id === id);
+    if (index === null || !question || !chosen) return Promise.resolve();
+    this.setAsking(null);
+    if (chosen.skipOffer) this.skipOffer = true;
+    void this.fetcher(this.notesUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject: question.subject, answer: chosen.id, text: chosen.label }),
+    }).catch(() => undefined);
+    return this.playMain(index + 1);
   }
 
   /** Stop button / mic pressed / "wait": stop now and listen. */
@@ -94,6 +126,12 @@ export class Conversation {
 
   /** Any typed or transcribed input: classify and act. Returns the intent it acted on. */
   input(text: string): Intent {
+    const asked = this.mode === "answering" && this.asking !== null ? this.main[this.asking]?.question : undefined;
+    const reply = asked ? matchAnswer(text, asked.answers) : null;
+    if (reply) {
+      void this.answer(reply.id);
+      return "continue";
+    }
     const intent = classify(text, this.world.focusTargets());
     if (intent === "continue") void this.resume();
     else if (intent === "wait") this.interrupt();
@@ -119,20 +157,21 @@ export class Conversation {
         return false;
       }
     });
-    if (prepared) {
-      this.events.emit({ type: "script", kind: "side", script: prepared.script, source: "prepared" });
-      if (!(await this.playSide(prepared.script, my))) return;
+    const preparedScript = prepared && (typeof prepared.script === "function" ? prepared.script(question) : prepared.script);
+    if (preparedScript) {
+      this.events.emit({ type: "script", kind: "side", script: preparedScript, source: "prepared" });
+      if (!(await this.playSide(preparedScript, my))) return;
       return this.finishSide(my);
     }
 
     if (this.backup) {
-      if (!(await this.player.speak(DIRECTOR_FAILURE_LINE, my, "failure"))) return;
+      if (!(await this.player.speak(BACKUP_NO_ANSWER_LINE, my, "failure"))) return;
       return this.finishSide(my);
     }
 
     const request: DirectorRequest = { question, screen: this.screen(), mode: "side" };
     const answer = this.callDirector(request);
-    if (!(await this.player.speak(FILLER_LINE, my, "filler"))) return;
+    if (!(await this.player.speak(FILLER_LINES[this.fillerIndex++ % FILLER_LINES.length], my, "filler"))) return;
     const response = await answer;
     if (!this.player.isCurrent(my)) return;
     if (!response || !isScript(response.script)) {
@@ -148,6 +187,12 @@ export class Conversation {
   /** "OK, let's continue": restore the snapshot, speak the bridge, replay the interrupted beat. */
   async resume(): Promise<void> {
     const s = this.snapshot;
+    if (!s && this.asking !== null) {
+      // "Continue" without an answer: move past the question.
+      const next = this.asking + 1;
+      this.setAsking(null);
+      return this.playMain(next);
+    }
     if (!s) {
       if (this.mainDone) return this.setMode("finished");
       return this.playMain(this.mode === "idle" ? 0 : this.mainIndex);
@@ -166,6 +211,7 @@ export class Conversation {
   end(): void {
     this.cancel();
     this.setSnapshot(null);
+    this.setAsking(null);
     this.setMode("finished");
   }
 
@@ -173,6 +219,20 @@ export class Conversation {
   confirmOffer(jar: string, figure?: Figure): void {
     this.world.fillJar?.(jar);
     if (figure) this.player.setFigure(figure);
+    // Spoken only when nothing else is talking, so it never cuts into a line.
+    if (this.mode === "finished" || this.mode === "waiting" || this.mode === "listening" || this.mode === "idle") {
+      const my = this.player.begin();
+      void this.player.speak(OFFER_CONFIRMED_LINE, my, "side");
+    } else {
+      this.confirmPending = true;
+    }
+  }
+
+  /** Says the offer confirmation that was tapped while a line was playing. False if `my` went stale. */
+  private async sayConfirmed(my: number): Promise<boolean> {
+    if (!this.confirmPending) return this.player.isCurrent(my);
+    this.confirmPending = false;
+    return this.player.speak(OFFER_CONFIRMED_LINE, my, "side");
   }
 
   /** What the director is told about the screen. */
@@ -194,25 +254,40 @@ export class Conversation {
     this.mainDone = false;
     if (from === 0) this.events.emit({ type: "script", kind: "main", script: this.main });
     for (let i = from; i < this.main.length; i++) {
+      const beat = this.main[i];
+      if (beat.offer && this.skipOffer) continue;
       this.mainIndex = i;
-      const ok = await this.player.playBeat(this.main[i], my, { kind: "main", beatIndex: i, beatCount: this.main.length });
+      const ok = await this.player.playBeat(beat, my, { kind: "main", beatIndex: i, beatCount: this.main.length });
       if (!ok) return;
+      if (beat.question) {
+        this.setAsking(i);
+        this.setMode("answering");
+        return;
+      }
     }
-    if (!this.player.isCurrent(my)) return;
+    if (!(await this.sayConfirmed(my))) return;
     this.mainDone = true;
     this.setMode("finished");
   }
 
   private async playSide(script: Script, my: number): Promise<boolean> {
     for (let i = 0; i < script.length; i++) {
+      if (script[i].offer && this.skipOffer) continue;
       const ok = await this.player.playBeat(script[i], my, { kind: "side", beatIndex: i, beatCount: script.length });
       if (!ok) return false;
     }
     return true;
   }
 
-  private finishSide(my: number): void {
-    if (this.player.isCurrent(my)) this.setMode("waiting");
+  private async finishSide(my: number): Promise<void> {
+    if (!(await this.sayConfirmed(my))) return;
+    this.setMode("waiting");
+  }
+
+  private setAsking(index: number | null): void {
+    if (index === this.asking) return;
+    this.asking = index;
+    this.events.emit({ type: "question", question: index !== null ? (this.main[index]?.question ?? null) : null });
   }
 
   private async callDirector(request: DirectorRequest): Promise<DirectorResponse | null> {

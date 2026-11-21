@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState, type KeyboardEvent } from "react";
-import type { ConversationMode } from "@/lib/contracts";
+import type { BeatQuestion, ConversationMode } from "@/lib/contracts";
+import { AFFORD_EXAMPLE } from "@/content/scripts";
 
 const modeText: Record<ConversationMode, string> = {
   idle: "Ready",
@@ -9,6 +10,7 @@ const modeText: Record<ConversationMode, string> = {
   listening: "Listening…",
   side: "Answering your question",
   waiting: "Shall we continue?",
+  answering: "Waiting for your answer",
   returning: "Picking up where we left off",
   finished: "Finished"
 };
@@ -61,15 +63,16 @@ export function StepBar({ main, side, mode }: { main: Step; side: Step; mode: Co
 
 type Chip = { label: string; run: () => void };
 
-export function Chips({ mode, onStart, onSay, onResume, onMore }: { mode: ConversationMode; onStart: () => void; onSay: (text: string) => void; onResume: () => void; onMore: () => void }) {
+export function Chips({ mode, question, onStart, onSay, onResume, onMore, onAnswer }: { mode: ConversationMode; question?: BeatQuestion | null; onStart: () => void; onSay: (text: string) => void; onResume: () => void; onMore: () => void; onAnswer?: (id: string) => void }) {
   const ask = (text: string): Chip => ({ label: text, run: () => onSay(text) });
   const cont: Chip = { label: "OK, let's continue", run: onResume };
   const chips: Record<ConversationMode, Chip[]> = {
     idle: [{ label: "Start the presentation", run: onStart }],
     presenting: [ask("Wait, why is September so high?"), ask("Wait, how can I save money?"), ask("Wait, what am I looking at?")],
-    listening: [ask("Why is September so high?"), ask("Why was November high?"), ask("How can I save money?"), ask("What are my spending habits?"), cont],
+    listening: [ask("Why is September so high?"), ask("Why was November high?"), ask("How can I save money?"), ask("What are my spending habits?"), ask(AFFORD_EXAMPLE), cont],
     side: [cont],
     waiting: [cont, { label: "One more question", run: onMore }],
+    answering: (question?.answers ?? []).map((a, i) => ({ label: a.label, run: () => onAnswer?.(a.id), primary: i === 0 })),
     returning: [],
     finished: [{ label: "Start over", run: onStart }]
   };

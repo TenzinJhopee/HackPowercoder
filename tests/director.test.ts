@@ -5,6 +5,7 @@ import { buildSeries, totalOf } from "../lib/director/series";
 import { extractNumbers, validateScript, type ValidationContext } from "../lib/director/validate";
 import fs from "node:fs";
 import { SIDE_ANSWERS } from "../content/scripts";
+import type { Script } from "../lib/contracts";
 import { allowedNumbers, buildFacts } from "../lib/facts";
 import { loadAccountCsv } from "../lib/load-accounts";
 import { buildDataBlock, DIRECTOR_INSTRUCTIONS } from "../lib/director/prompt";
@@ -128,8 +129,8 @@ test("prepared answers cover saving and habit questions without stealing month o
   assert.equal(match("How can I save in November?"), "november");
   assert.equal(match("Why is September so high?"), "september");
   assert.equal(match("what about my savings?"), undefined);
-  const save = SIDE_ANSWERS.find((a) => a.id === "save")!.script;
+  const save = SIDE_ANSWERS.find((a) => a.id === "save")!.script as Script;
   assert.equal(save.filter((b) => b.offer).length, 1);
   assert.ok(save.at(-1)?.offer);
-  assert.ok(!SIDE_ANSWERS.find((a) => a.id === "habits")!.script.some((b) => b.offer));
+  assert.ok(!(SIDE_ANSWERS.find((a) => a.id === "habits")!.script as Script).some((b) => b.offer));
 });

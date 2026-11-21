@@ -1,4 +1,5 @@
-import { cardBudgetMonthly, cardCycles } from "@/lib/card-cycle";
+import { replayPurchase, roomBeforeLowest } from "@/lib/afford";
+import { cardBudgetMonthly, cardCycles, cardPayments } from "@/lib/card-cycle";
 import { getBalanceSeries } from "@/lib/intelligence";
 import { groupLabels, necessities, necessityLabels, ruleTags, type MerchantTag } from "@/lib/merchant-tags";
 import type { Transaction } from "@/lib/models";
@@ -45,7 +46,18 @@ export interface FactsSummary {
   spending: SpendingProfile["spending"];
   byNecessity: { necessity: string; label: string; yearly: number; monthly: number; share: number }[];
   topGroups: { group: string; label: string; net: number; necessity: string }[];
+  /** Salary minus fixed costs; an upper bound, since spending paid from other accounts is not in the data (see accounts_complete). */
   monthlyRoomAfterCompulsory: number;
+  /**
+   * "Can I afford it?": a replay of last year's private-account balance with one extra card purchase, not a forecast.
+   * roomByMonth = largest purchase in that month that would not have gone below the year's lowest point.
+   */
+  affordReplay: {
+    lowestPoint: number;
+    lowestPointDate: string;
+    roomByMonth: { month: number; room: number }[];
+    example: { amount: number; month: number; newLowest: number; newLowestDate: string; belowLowestPoint: number; earliestOkMonth: number | null }[];
+  } | null;
   levers: {
     adjustable: { merchant: string; yearly: number }[];
     flexibleHabits: { merchant: string; yearly: number; purchases: number }[];
@@ -57,6 +69,9 @@ export interface FactsSummary {
   notes: { subject: string; answer: string; text: string }[];
   assumptions: string[];
 }
+
+/** The fixed "Can I afford a 3,000 franc laptop?" example, precomputed for every purchase month. */
+export const AFFORD_EXAMPLE_AMOUNT = 3000;
 
 /** Swiss pillar 3a maximum for employees with a pension fund, 2025. */
 export const PILLAR_3A_LIMIT_2025 = 7258;
@@ -108,6 +123,7 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
   const profile = getSpendingProfile(profileTransactions, currency, tags);
   const periodStart = profile.periodStart;
   const periodEnd = profile.periodEnd;
+  let affordReplay: FactsSummary["affordReplay"] = null;
 
   // 1. Year-end result and how much of it is the extra (13th) salary.
   if (privateAccount) {
@@ -133,6 +149,20 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
         figures: { lowestMonthEnd: balance.lowestMonthEnd.balance, lowestMonthEndMonth: balance.lowestMonthEnd.date.slice(0, 7), lowestDay: balance.lowestDay.balance, lowestDayDate: balance.lowestDay.date },
         evidence: []
       });
+    }
+
+    // 2b. "Can I afford it?" numbers for the director: a replay of last year, not a forecast.
+    if (balance.lowestDay) {
+      const paymentDates = cardPayments(selected).map((p) => p.date);
+      affordReplay = {
+        lowestPoint: balance.lowestDay.balance,
+        lowestPointDate: balance.lowestDay.date,
+        roomByMonth: roomBeforeLowest(balance.daily, paymentDates),
+        example: Array.from({ length: 12 }, (_, i) => {
+          const r = replayPurchase(balance.daily, AFFORD_EXAMPLE_AMOUNT, i + 1, paymentDates);
+          return { amount: r.amount, month: r.month, newLowest: r.newLowest.balance, newLowestDate: r.newLowest.date, belowLowestPoint: r.belowActualLowest, earliestOkMonth: r.earliestOkMonth };
+        })
+      };
     }
   }
 
@@ -215,6 +245,42 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
       question: "I don't see any 3a or savings payments this year. Do you have a 3a account at another bank?",
       answers: ["has_elsewhere", "none"],
       evidence: []
+    });
+  }
+
+  // 5b. Is this everything? No groceries and no cash withdrawals suggests spending paid from another account.
+  const everyday = /migros|\bcoop\b(?!.*tankstelle)|denner|aldi|lidl|\bspar\b|volg|supermar|grocer|lebensmittel/i;
+  const cash = /bancomat|\batm\b|geldautomat|bargeld|geldbezug|cash/i;
+  const groceryTagged = new Set(tags.filter((tag) => /grocer|supermarket/i.test(tag.reason)).map((tag) => tag.merchant));
+  const groceries = expenses.filter((t) => groceryTagged.has(t.merchant) || everyday.test(`${t.merchant} ${t.description}`));
+  const withdrawals = selected.filter((t) => t.amount < 0 && cash.test(`${t.merchant} ${t.description}`));
+  const accounts = new Set(selected.map((t) => t.account)).size;
+  if (!groceries.length && !withdrawals.length) {
+    add({
+      id: "accounts_complete",
+      kind: "what_is_missing",
+      mode: "ask",
+      summary: `The ${accounts} accounts show no grocery shopping and no cash withdrawals in ${periodStart.slice(0, 4)}, so some everyday spending may be paid another way.`,
+      figures: { accounts, groceryPayments: 0, cashWithdrawals: 0 },
+      question: "I see no groceries or cash withdrawals here. Do you have another account, or pay daily shopping another way?",
+      answers: ["has_other", "complete"],
+      evidence: []
+    });
+  }
+
+  // 5c. Tax: payments found against yearly income. Never state or estimate what the tax bill should be.
+  const taxPayments = expenses.filter((t) => /Steuer/i.test(t.merchant));
+  if (taxPayments.length) {
+    const taxPaid = round(taxPayments.reduce((sum, t) => sum - t.amount, 0));
+    add({
+      id: "tax_provision",
+      kind: "what_is_missing",
+      mode: "ask",
+      summary: `${taxPayments.length} tax payments of ${chf(taxPaid)} in total were found against ${chf(profile.income.total)} of income.`,
+      figures: { taxPayments: taxPayments.length, taxPaid, yearlyIncome: profile.income.total },
+      question: "I see a few tax payments. Is tax taken from your salary, or paid from another account?",
+      answers: ["handled_elsewhere", "not_yet"],
+      evidence: taxPayments.map((t) => t.id)
     });
   }
 
@@ -317,6 +383,7 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
     })),
     topGroups: profile.groups.slice(0, 8).map((g) => ({ group: g.group, label: groupLabels[g.group], net: g.net, necessity: g.necessity })),
     monthlyRoomAfterCompulsory: profile.monthlyRoomAfterCompulsory,
+    affordReplay,
     levers: {
       adjustable: profile.levers.adjustable.map((m) => ({ merchant: m.merchant, yearly: m.net })),
       flexibleHabits: profile.levers.flexibleHabits.map((m) => ({ merchant: m.merchant, yearly: m.net, purchases: m.count }))
@@ -328,6 +395,12 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
     assumptions: [
       ...profile.assumptions,
       "Balances are measured from the start of the period (opening balance unknown, taken as 0).",
+      ...(insights.some((i) => i.id === "accounts_complete" && i.userAnswer === "complete")
+        ? []
+        : [
+            "These two accounts may not be all of her spending (no groceries or cash withdrawals): monthlyRoomAfterCompulsory is an upper bound before any spending paid another way; say 'at most', never present it as free money."
+          ]),
+      "affordReplay replays last year's balance with one extra purchase; it is not a forecast. Describe consequences only, never say whether to buy.",
       "Insights in mode 'ask' must be asked, never stated as fact; 'resolved' ones use the user's answer."
     ]
   };

@@ -1,6 +1,7 @@
 import { cardAccounts, cardBudgetMonthly, cardCycles, cardPayments } from "@/lib/card-cycle";
 import { OFFER, PILLAR_3A_LIMIT_2025, buildFacts, type FactsSummary, type Insight } from "@/lib/facts";
 import { fallbackTag, ruleTags, spendingGroups, type MerchantTag, type SpendingGroup } from "@/lib/merchant-tags";
+import { getBalanceSeries } from "@/lib/intelligence";
 import type { Transaction } from "@/lib/models";
 
 /**
@@ -48,6 +49,11 @@ export interface FactsExport {
   insights: Omit<Insight, "evidence">[];
   /** Profile figures for savings and habit answers: fixed / adjustable / flexible split and the realistic levers. */
   profile: Pick<FactsSummary, "byNecessity" | "monthlyRoomAfterCompulsory" | "levers">;
+  /** Private-account balance at the end of each day with activity, relative to 1 January: [date, balance]. For lib/afford.ts. */
+  private_balance_daily: [string, number][];
+  card_payment_dates: string[];
+  /** The fixed "Can I afford a 3,000 franc laptop?" example per purchase month (replay of last year, not a forecast). */
+  afford_example: FactsSummary["affordReplay"];
 }
 
 const round = (value: number) => Math.round(value);
@@ -250,9 +256,13 @@ export function buildFactsExport(transactions: Transaction[], currency = "CHF", 
     gaps.push({ id: "no_pillar_3a", mode: "ask", label: "No pillar 3a payment", yearly_amount: 0, limit: PILLAR_3A_LIMIT_2025 });
     gaps.push({ id: "no_savings", mode: "ask", label: "No savings transfer", yearly_amount: 0 });
   }
-  const taxPayments = spendingTx.filter((t) => t.type === "expense" && /Steuer/i.test(t.merchant));
-  if (taxPayments.length) {
-    gaps.push({ id: "tax_provision", mode: "ask", label: "Tax paid so far", paid: round(taxPayments.reduce((s, t) => s - t.amount, 0)), payments: taxPayments.length });
+  // Same figures as the tax_provision insight in buildFacts.
+  const tax = facts.insights.find((i) => i.id === "tax_provision");
+  if (tax) {
+    gaps.push({ id: "tax_provision", mode: "ask", label: "Tax paid so far", paid: round(Number(tax.figures.taxPaid)), payments: Number(tax.figures.taxPayments) });
+  }
+  if (facts.insights.some((i) => i.id === "accounts_complete")) {
+    gaps.push({ id: "accounts_complete", mode: "ask", label: "No groceries or cash withdrawals" });
   }
 
   return {
@@ -278,6 +288,9 @@ export function buildFactsExport(transactions: Transaction[], currency = "CHF", 
     card_cycles: cycles,
     offer: { ...OFFER },
     insights,
-    profile: { byNecessity: facts.byNecessity, monthlyRoomAfterCompulsory: facts.monthlyRoomAfterCompulsory, levers: facts.levers }
+    profile: { byNecessity: facts.byNecessity, monthlyRoomAfterCompulsory: facts.monthlyRoomAfterCompulsory, levers: facts.levers },
+    private_balance_daily: getBalanceSeries(selected, currency, 0, privateAccount).daily.map((p) => [p.date, p.balance]),
+    card_payment_dates: cardPayments(selected).map((p) => p.date),
+    afford_example: facts.affordReplay
   };
 }

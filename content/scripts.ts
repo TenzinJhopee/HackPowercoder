@@ -1,4 +1,5 @@
-import { DEFAULT_BRIDGE, DIRECTOR_FAILURE_LINE, FILLER_LINE, type Breakdown, type Script } from "../lib/contracts";
+import { parseAmount, parseMonth, replayPurchase, type BalancePoint } from "../lib/afford";
+import { DEFAULT_BRIDGE, DIRECTOR_FAILURE_LINE, FILLER_LINE, FILLER_LINES, type Breakdown, type Script } from "../lib/contracts";
 import type { FactsExport } from "../lib/facts-export";
 import rawFacts from "../public/facts.json";
 
@@ -16,7 +17,7 @@ const facts = rawFacts as unknown as FactsExport;
 /** Breakdown for a month, taken from facts.json so the parts always add up to the month's spending. */
 const breakdown = (month: number): Breakdown => ({ month, parts: facts.monthly_breakdown_parts[String(month)] });
 
-// ---------- Main presentation (8 beats) ----------
+// ---------- Main presentation (10 beats) ----------
 
 export const MAIN: Script = [
   {
@@ -30,6 +31,19 @@ export const MAIN: Script = [
     scene: { type: "monthly" },
     cues: [{ word: "88,379", figure: { label: "Spent in 2025", value: 88379 } }],
     bridge: "Back to the twelve months of spending."
+  },
+  {
+    say: "I see no groceries or cash withdrawals here; do you shop from another account or card?",
+    scene: { type: "monthly" },
+    cues: [{ word: "groceries" }, { word: "account" }],
+    bridge: "Back to whether these accounts are everything.",
+    question: {
+      subject: "accounts_complete",
+      answers: [
+        { id: "has_other", label: "Yes, I have another account", kind: "yes" },
+        { id: "complete", label: "No, this is everything", kind: "no" }
+      ]
+    }
   },
   {
     say: "The summer was heavy: June cost 10,365 francs, July 12,363, largely the bike and London.",
@@ -62,7 +76,27 @@ export const MAIN: Script = [
     say: "In February I don't see your 982 francs health insurance payment; was it paid elsewhere?",
     scene: { type: "monthly", focus: 2 },
     cues: [{ word: "insurance", target: 2, action: "ghost", figure: { label: "Health insurance, usually", value: 982 } }],
-    bridge: "Back to the February payment."
+    bridge: "Back to the February payment.",
+    question: {
+      subject: "missing_payment:Krankenkasse:2025-02",
+      answers: [
+        { id: "paid_elsewhere", label: "Yes, from another account", kind: "yes" },
+        { id: "missed", label: "No, it was missed", kind: "no" }
+      ]
+    }
+  },
+  {
+    say: "I see three tax payments, 630 francs in all; is tax taken from your salary or paid elsewhere?",
+    scene: { type: "pools" },
+    cues: [{ word: "tax", target: "Tax", figure: { label: "Tax paid in 2025", value: 630 } }],
+    bridge: "Back to the tax payments.",
+    question: {
+      subject: "tax_provision",
+      answers: [
+        { id: "handled_elsewhere", label: "Yes, it is handled elsewhere", kind: "yes" },
+        { id: "not_yet", label: "No, not yet", kind: "no" }
+      ]
+    }
   },
   {
     say: "I also see no pillar 3a payment and no savings transfer this year; do you keep them elsewhere?",
@@ -71,7 +105,14 @@ export const MAIN: Script = [
       { word: "pillar", target: "3a" },
       { word: "savings", target: "Savings" }
     ],
-    bridge: "Back to what never started this year."
+    bridge: "Back to what never started this year.",
+    question: {
+      subject: "no_pillar_3a",
+      answers: [
+        { id: "has_elsewhere", label: "Yes, at another bank", kind: "yes", skipOffer: true },
+        { id: "none", label: "No, I have none", kind: "no" }
+      ]
+    }
   },
   {
     say: "If you like, 200 francs a month into pillar 3a adds up to 2,400 francs in a year.",
@@ -87,11 +128,79 @@ export const MAIN: Script = [
 
 // ---------- Prepared side answers (June, July, September, November) ----------
 
-export type SideAnswer = { id: string; match(question: string): boolean; script: Script };
+/** `script` may be built from the question (the affordability answer); every other answer is fixed. */
+export type SideAnswer = { id: string; match(question: string): boolean; script: Script | ((question: string) => Script) };
 
 const asks = (pattern: RegExp) => (question: string) => pattern.test(question.toLocaleLowerCase("en"));
 
+// ---------- "Can I afford this?" (built from the question; a replay of last year, not a forecast) ----------
+
+/** The chip's fixed example; its lines are pre-generated and its numbers are in facts.json (afford_example). */
+export const AFFORD_EXAMPLE = "Can I afford a 3,000 franc laptop?";
+export const AFFORD_ASK_AMOUNT_LINE = "How much is it?";
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const daily: BalancePoint[] = facts.private_balance_daily.map(([date, balance]) => ({ date, balance }));
+const francs = (value: number) => Math.round(Math.abs(value)).toLocaleString("en-US");
+
+/** Two or three beats on the month-by-month balance. Consequences only: never says whether to buy. */
+export function affordScript(amount: number, month: number): Script {
+  const r = replayPurchase(daily, amount, month, facts.card_payment_dates);
+  const bought = MONTH_NAMES[month - 1];
+  const lowMonth = Number(r.newLowest.date.slice(5, 7));
+  const lowest = francs(r.actualLowest.balance);
+  const lowestFigure = { label: "Lowest point with the purchase, compared with the start", value: Math.round(r.newLowest.balance) };
+  if (r.belowActualLowest > 0) {
+    const script: Script = [
+      {
+        say: `Replaying last year, bought in ${bought}, that takes you to ${francs(r.newLowest.balance)} francs below the year's start by ${MONTH_NAMES[lowMonth - 1]}.`,
+        scene: { type: "level", focus: month },
+        cues: [{ word: bought, target: month }, { word: francs(r.newLowest.balance), target: lowMonth, figure: lowestFigure }]
+      },
+      {
+        say: `That is ${francs(r.belowActualLowest)} francs deeper than last year's lowest point, ${lowest} below the start.`,
+        scene: { type: "level", focus: lowMonth },
+        cues: [{ word: "deeper", target: lowMonth }]
+      }
+    ];
+    if (r.earliestOkMonth !== null && r.earliestOkMonth > month) {
+      const ok = MONTH_NAMES[r.earliestOkMonth - 1];
+      script.push({
+        say: `From ${ok} on, the same purchase stays above last year's lowest point.`,
+        scene: { type: "level", focus: r.earliestOkMonth },
+        cues: [{ word: ok, target: r.earliestOkMonth === 12 ? "13" : r.earliestOkMonth }]
+      });
+    }
+    return script;
+  }
+  return [
+    {
+      say: `Replaying last year, bought in ${bought}, the balance stays above its lowest point, ${lowest} below the start.`,
+      scene: { type: "level", focus: month },
+      cues: [{ word: bought, target: month }]
+    },
+    { say: "That is last year's pattern replayed, not a forecast for this year.", scene: { type: "level", focus: month } }
+  ];
+}
+
+const affordAnswer: SideAnswer = {
+  id: "afford",
+  match: (question) =>
+    /\b(afford|can i (buy|spend))\b/i.test(question) || /^\s*(about\s+)?[\d.,'’]+\s*(k|thousand)?\s*(francs?|chf)?\s*[.?!]?\s*$/i.test(question),
+  script: (question) => {
+    const amount = parseAmount(question);
+    if (amount === null) return [{ say: AFFORD_ASK_AMOUNT_LINE, scene: { type: "level" } }];
+    return affordScript(amount, parseMonth(question));
+  }
+};
+
+/** Every afford script the fixed example can produce (its month defaults to the next calendar month). */
+export const affordExampleScripts = (): Script[] => MONTH_NAMES.map((_, i) => affordScript(parseAmount(AFFORD_EXAMPLE)!, i + 1));
+
+/** The scripts a side answer can play: the fixed one, or every variant of the fixed example. */
+export const sideScripts = (answer: SideAnswer): Script[] => (typeof answer.script === "function" ? affordExampleScripts() : [answer.script]);
+
 export const SIDE_ANSWERS: SideAnswer[] = [
+  affordAnswer,
   {
     id: "june",
     match: asks(/\bjun(e)?\b/),
@@ -110,9 +219,9 @@ export const SIDE_ANSWERS: SideAnswer[] = [
         cues: [{ word: "insurance", target: "Health insurance" }, { word: "Digitec", target: "Digitec" }]
       },
       {
-        say: "Together that took your card past its monthly budget of 3,600 francs.",
+        say: "The bike alone took your card past its monthly budget of 3,600 francs.",
         scene: { type: "monthly", focus: 6 },
-        cues: [{ word: "card", figure: { label: "Card budget per month", value: 3600 } }]
+        cues: [{ word: "card", target: "Bike", figure: { label: "Card budget per month", value: 3600 } }]
       }
     ]
   },
@@ -134,7 +243,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
         cues: [{ word: "bike", target: "Bike" }, { word: "London", target: "London trip" }]
       },
       {
-        say: "Then clothing added 1,136 francs, and health insurance 982 as every month.",
+        say: "Then clothing added 1,136 francs, and health insurance 982.",
         scene: { type: "monthly", focus: 7 },
         cues: [{ word: "clothing", target: "Clothing" }, { word: "insurance", target: "Health insurance" }]
       },
@@ -186,7 +295,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
         ]
       },
       {
-        say: "Most of it was Apple, with 3,189 francs.",
+        say: "The largest part was Apple, with 3,189 francs.",
         scene: { type: "monthly", focus: 11 },
         cues: [{ word: "Apple", target: "Apple", figure: { label: "Apple", value: 3189 } }]
       },
@@ -213,7 +322,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
         ]
       },
       {
-        say: "After the fixed costs, 4,383 francs of your salary are left each month.",
+        say: "After the fixed costs, at most 4,383 francs of your salary are left each month.",
         scene: { type: "pools" },
         cues: [{ word: "left", target: "Left over", figure: { label: "Left each month after fixed costs", value: 4383 } }]
       },
@@ -266,7 +375,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
 
 // ---------- Fixed lines (constants) ----------
 
-export { DEFAULT_BRIDGE, DIRECTOR_FAILURE_LINE, FILLER_LINE };
+export { DEFAULT_BRIDGE, DIRECTOR_FAILURE_LINE, FILLER_LINE, FILLER_LINES };
 /** Spoken after the touch confirmation of the offer. The demo makes no real payment and says so. */
 export const OFFER_CONFIRMED_LINE = "Thank you. This is a demo, so no money has moved.";
 /** Spoken in backup mode when a question has no prepared answer. */
@@ -277,20 +386,21 @@ export const NOT_UNDERSTOOD_LINE = "I did not catch that. Could you ask again?";
 export const FINISHED_LINE = "That was your year. Ask me about any month, or start over whenever you like.";
 
 export const FIXED_LINES: string[] = [
-  FILLER_LINE,
+  ...FILLER_LINES,
   DEFAULT_BRIDGE,
   DIRECTOR_FAILURE_LINE,
   OFFER_CONFIRMED_LINE,
   BACKUP_NO_ANSWER_LINE,
   NOT_UNDERSTOOD_LINE,
-  FINISHED_LINE
+  FINISHED_LINE,
+  AFFORD_ASK_AMOUNT_LINE
 ];
 
 /** Every spoken line, deduplicated, in demo order. Used by the pre-generation script and the tests. */
 export function allLines(): string[] {
   const lines = [
     ...MAIN.flatMap((beat) => [beat.say, beat.bridge ?? ""]),
-    ...SIDE_ANSWERS.flatMap((answer) => answer.script.map((beat) => beat.say)),
+    ...SIDE_ANSWERS.flatMap((answer) => sideScripts(answer).flat().map((beat) => beat.say)),
     ...FIXED_LINES
   ].filter(Boolean);
   return [...new Set(lines)];
