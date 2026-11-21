@@ -6,6 +6,7 @@ import { Chips, InputRow, ModeLine, StatusBar, StepBar, useInputFocus } from "./
 import { OfferCard } from "./offer-card";
 import { ScriptPanel } from "./script-panel";
 import { Stage } from "./stage";
+import { Takeaway } from "./takeaway";
 import { useAdvisor } from "./use-advisor";
 import { Welcome } from "./welcome";
 import { useSpeechInput } from "./use-speech-input";
@@ -49,7 +50,7 @@ export function AdvisorShell() {
           <StepBar main={advisor.mainStep} side={advisor.sideStep} mode={advisor.mode} />
         </div>
         <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start lg:gap-6">
-          <Stage world={advisor.world} figure={advisor.figure} pausedAt={pausedAt} />
+          <Stage world={advisor.world} figure={advisor.figure} pausedAt={pausedAt} banner={<Takeaway line={advisor.line} kind={advisor.lineKind} mode={advisor.mode} />} />
           <div className="flex min-w-0 flex-col gap-4">
             {advisor.mode === "idle" ? (
               <Welcome onSay={advisor.say} onStart={advisor.start} />

@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Conversation, Voice, isBackupMode, type EngineEvent, type VoiceStatus } from "@/client";
 import type { Beat, BeatQuestion, ConversationMode, Figure, Snapshot } from "@/lib/contracts";
+import type { LineKind } from "@/client/events";
 import { MAIN, SIDE_ANSWERS } from "@/content/scripts";
 import { GrainWorld } from "@/client/world/grain-world";
 import type { CaptionLine } from "./caption";
@@ -23,6 +24,7 @@ type Step = { index: number; count: number };
 type State = {
   mode: ConversationMode;
   line: CaptionLine | null;
+  lineKind: LineKind | null;
   main: Step | null;
   side: Step | null;
   figure: FigureChange;
@@ -37,6 +39,7 @@ type State = {
 const initialState: State = {
   mode: "idle",
   line: null,
+  lineKind: null,
   main: null,
   side: null,
   figure: { seq: 0, from: null, to: OPENING_FIGURE },
@@ -60,6 +63,7 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         line: { words: event.words, cueIndices: event.cueIndices, spoken: 0 },
+        lineKind: event.kind,
         main: event.kind === "main" && step ? step : state.main,
         side: event.kind === "side" && step ? step : event.kind === "main" ? null : state.side
       };
@@ -154,6 +158,7 @@ export function useAdvisor() {
   return {
     mode: state.mode,
     line: state.line,
+    lineKind: state.lineKind,
     figure: state.figure,
     mainStep: state.main,
     sideStep: state.side,
