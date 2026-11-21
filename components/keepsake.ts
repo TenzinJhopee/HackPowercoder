@@ -7,8 +7,8 @@ import type { Keepsake } from "@/lib/savings-plan";
  */
 export type KeptSlip = { keepsake: Keepsake; revealed: number; live: boolean };
 
-/** Everything on the slip: every cut plus the total line. */
-export const slipLines = (keepsake: Keepsake) => keepsake.plan.cuts.length + 1;
+/** Everything on the slip: every cut plus the total line, or the overview's groups (one per beat). */
+export const slipLines = (keepsake: Keepsake) => (keepsake.kind === "overview" ? keepsake.groups.length : keepsake.plan.cuts.length + 1);
 
 /** Only the engine and the user's close touch the slip; a new savings answer replaces it. */
 export function keepReducer(slip: KeptSlip | null, event: EngineEvent): KeptSlip | null {

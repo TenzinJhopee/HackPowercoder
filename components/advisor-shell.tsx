@@ -46,7 +46,7 @@ export function AdvisorShell() {
       />
       <main className="mx-auto w-full max-w-2xl px-4 pb-8 pt-5 md:max-w-3xl md:px-6 md:pt-6 lg:max-w-6xl lg:px-8 lg:pt-8">
         <div className="space-y-2.5 pb-4 lg:pb-6">
-          <ModeLine mode={advisor.mode} backup={availability.backup} />
+          <ModeLine mode={advisor.mode} backup={availability.backup} started={advisor.mainStep !== null} />
           <StepBar main={advisor.mainStep} side={advisor.sideStep} mode={advisor.mode} />
         </div>
         <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start lg:gap-6">
@@ -57,6 +57,7 @@ export function AdvisorShell() {
             <Chips
               mode={advisor.mode}
               question={advisor.question}
+              started={advisor.mainStep !== null}
               onAnswer={advisor.answer}
               onStart={advisor.start}
               onSay={advisor.say}

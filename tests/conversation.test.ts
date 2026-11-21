@@ -335,7 +335,7 @@ test("the savings answer emits its plan; the slip reveals a line per beat and st
   const firstLine = events.findIndex((e) => e.type === "line");
   assert.ok(keep >= 0 && keep < firstLine, "plan arrives before the first beat");
   const event = events[keep];
-  assert.ok(event.type === "keep");
+  assert.ok(event.type === "keep" && event.keepsake.kind === "savings");
   const { plan, names } = event.keepsake;
   assert.equal(plan.shortfall, 0);
   assert.equal(names.length, plan.cuts.length);
@@ -353,6 +353,23 @@ test("the savings answer emits its plan; the slip reveals a line per beat and st
     slip = keepReducer(slip, e);
   }
   assert.equal(slip?.revealed, plan.cuts.length + 1, "later answers leave the slip alone");
+});
+
+test("the general savings answer keeps an overview slip: one group per beat before the offer, numbers as spoken", async () => {
+  const { SIDE_ANSWERS } = await import("../content/scripts");
+  const answer = SIDE_ANSWERS.find((a) => a.id === "save")!;
+  const script = answer.script as import("../lib/contracts").Script;
+  const keepsake = answer.keep?.("How can I save money?");
+  assert.ok(keepsake?.kind === "overview");
+  assert.equal(keepsake.groups.length, script.length - 1, "the offer beat has its own card");
+  assert.ok(script[script.length - 1].offer);
+  keepsake.groups.forEach((group, i) => {
+    for (const row of group.rows) {
+      for (const value of [row.value, row.also?.value].filter((v) => v !== undefined)) {
+        assert.ok(script[i].say.includes(value.toLocaleString("en-US")), `${value} in "${script[i].say}"`);
+      }
+    }
+  });
 });
 
 test("a specific month question goes to the director first; the fixed answer is the fallback", async () => {

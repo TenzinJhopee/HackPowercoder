@@ -63,11 +63,30 @@ export interface SavingsPlan {
 }
 
 /** A plan that stays on screen after it is spoken; `names[i]` is how cut i is called (plural, from PURCHASE_NAMES). */
-export interface Keepsake {
+export interface PlanKeepsake {
   kind: "savings";
   plan: SavingsPlan;
   names: string[];
 }
+
+/** One line of the overview slip. "saved": money she keeps (green); "spend": what it costs her now (amber). */
+export interface OverviewRow {
+  label: string;
+  value: number;
+  per: "month" | "year";
+  tone: "saved" | "spend";
+  /** A second, smaller figure on the same line ("251 a year"). */
+  also?: { value: number; per: "month" | "year" };
+}
+
+/** "How can I save money?" kept on screen: group i is what beat i said, under a one-word caption. */
+export interface OverviewKeepsake {
+  kind: "overview";
+  groups: { caption: string; rows: OverviewRow[] }[];
+}
+
+/** What stays on screen after a savings answer: the plan for a target, or the general overview. */
+export type Keepsake = PlanKeepsake | OverviewKeepsake;
 
 const MIN_PER_MONTH = 2;
 /** A purchase cheaper than this is not worth naming as a cut. */

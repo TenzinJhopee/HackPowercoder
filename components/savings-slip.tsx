@@ -1,6 +1,6 @@
 "use client";
 
-import type { Cut } from "@/lib/savings-plan";
+import type { Cut, OverviewKeepsake, OverviewRow, PlanKeepsake } from "@/lib/savings-plan";
 import { swiss } from "./format";
 import type { KeptSlip } from "./keepsake";
 
@@ -74,16 +74,53 @@ function CutLine({ cut, name }: { cut: Cut; name: string }) {
   );
 }
 
-/** The savings plan as a paper slip she keeps: it stays until she closes it (or starts over). */
+function OverviewLine({ row }: { row: OverviewRow }) {
+  const saved = row.tone === "saved";
+  return (
+    <li className="slip-line flex items-baseline gap-2 py-1.5" aria-label={`${row.label}: ${saved ? "saves" : "costs"} ${row.value} francs a ${row.per}`}>
+      <span className="text-sm font-medium text-ink">{row.label}</span>
+      <span aria-hidden className="mb-1 flex-1 border-b border-dotted border-faint/40" />
+      {row.also && (
+        <span className="text-[11px] tabular-nums text-faint">
+          {swiss(row.also.value)} a {row.also.per}
+        </span>
+      )}
+      <span className={`text-base font-semibold tabular-nums ${saved ? "text-saved-ink" : "text-spend-ink"}`}>
+        {saved && "+"}
+        {swiss(row.value)}
+        <span className="ml-0.5 text-[11px] font-normal text-faint">/{row.per === "month" ? "mo" : "yr"}</span>
+      </span>
+    </li>
+  );
+}
+
+/** "How can I save money?": one captioned group per spoken beat. */
+function OverviewBody({ keepsake, revealed }: { keepsake: OverviewKeepsake; revealed: number }) {
+  return (
+    <div className="space-y-3">
+      {keepsake.groups.slice(0, revealed).map((group) => (
+        <div key={group.caption} className="slip-line">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-faint">{group.caption}</p>
+          <ul className="divide-y divide-dashed divide-line">
+            {group.rows.map((row) => (
+              <OverviewLine key={row.label} row={row} />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A savings answer as a paper slip she keeps: it stays until she closes it (or starts over). */
 export function SavingsSlip({ slip, onClose }: { slip: KeptSlip; onClose: () => void }) {
-  const { plan, names } = slip.keepsake;
-  const cuts = plan.cuts.slice(0, slip.revealed);
-  const totalShown = slip.revealed > plan.cuts.length;
-  const short = plan.shortfall > 0;
+  const { keepsake } = slip;
+  const overview = keepsake.kind === "overview";
+  const title = overview ? "Ways to save" : "Savings plan";
 
   return (
     <section
-      aria-label="Your savings plan"
+      aria-label={overview ? "Ways to save" : "Your savings plan"}
       onKeyDown={(event) => {
         if (event.key === "Escape") onClose();
       }}
@@ -93,15 +130,19 @@ export function SavingsSlip({ slip, onClose }: { slip: KeptSlip; onClose: () => 
       <div className="overflow-hidden bg-white px-6 pb-4 pt-2">
         <div className="flex items-start justify-between gap-3">
           <div className="pt-2">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-faint">Savings plan</p>
-            <p className="mt-1 text-sm tabular-nums text-soft">
-              Goal <span className="font-semibold text-ink">CHF {swiss(plan.target)}</span> a month
-            </p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-faint">{title}</p>
+            {keepsake.kind === "savings" ? (
+              <p className="mt-1 text-sm tabular-nums text-soft">
+                Goal <span className="font-semibold text-ink">CHF {swiss(keepsake.plan.target)}</span> a month
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-soft">From your 2025</p>
+            )}
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close savings plan"
+            aria-label={`Close ${title.toLowerCase()}`}
             className="-mr-3 grid h-11 w-11 shrink-0 place-items-center rounded-full text-faint transition-colors hover:bg-canvas hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink"
           >
             <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4">
@@ -112,6 +153,21 @@ export function SavingsSlip({ slip, onClose }: { slip: KeptSlip; onClose: () => 
 
         <Perforation />
 
+        {keepsake.kind === "overview" ? <OverviewBody keepsake={keepsake} revealed={slip.revealed} /> : <PlanBody keepsake={keepsake} revealed={slip.revealed} />}
+      </div>
+      <Edge flip />
+    </section>
+  );
+}
+
+/** "How can I save X a month?": the cuts, then the total. */
+function PlanBody({ keepsake, revealed }: { keepsake: PlanKeepsake; revealed: number }) {
+  const { plan, names } = keepsake;
+  const cuts = plan.cuts.slice(0, revealed);
+  const totalShown = revealed > plan.cuts.length;
+  const short = plan.shortfall > 0;
+  return (
+    <>
         <ul className="divide-y divide-dashed divide-line">
           {cuts.map((cut, i) => (
             <CutLine key={cut.merchant} cut={cut} name={names[i] ?? cut.merchant} />
@@ -134,8 +190,6 @@ export function SavingsSlip({ slip, onClose }: { slip: KeptSlip; onClose: () => 
             )}
           </div>
         )}
-      </div>
-      <Edge flip />
-    </section>
+    </>
   );
 }

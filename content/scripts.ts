@@ -1,5 +1,5 @@
 import { measureAgainstSurplus, parseAmount, parseMonth, replayPurchase, type BalancePoint } from "../lib/afford";
-import { savingsPlan, type Keepsake } from "../lib/savings-plan";
+import { savingsPlan, type Keepsake, type OverviewKeepsake } from "../lib/savings-plan";
 import { DEFAULT_BRIDGE, DIRECTOR_FAILURE_LINE, FILLER_LINE, FILLER_LINES, type Breakdown, type Script } from "../lib/contracts";
 import type { FactsExport } from "../lib/facts-export";
 import rawFacts from "../public/facts.json";
@@ -340,10 +340,13 @@ export function saveScript(target: number): Script {
  * from facts.savings (the largest subscription, then up to two payments worth comparing, largest first; never a
  * saving figure for a switch), then the repeated habits, then the one option, last.
  */
-function saveAdviceScript(): Script {
+function saveAdvice(): { script: Script; keepsake: OverviewKeepsake } {
   const script: Script = [];
+  // The slip that stays: one group per spoken beat, from the same values (the offer beat has its own card).
+  const groups: OverviewKeepsake["groups"] = [];
   const drop = cancellable[0];
   if (drop) {
+    groups.push({ caption: "Cancel", rows: [{ label: capital(drop.name), value: drop.savesMonthly, per: "month", tone: "saved", also: { value: drop.savesYearly, per: "year" } }] });
     script.push({
       say: `If you rarely use ${drop.name}, cancelling it saves ${francs(drop.savesMonthly)} francs a month, ${francs(drop.savesYearly)} a year${drop.savesMonthly < SMALL_MONTHLY ? ": small, but simple" : ""}.`,
       scene: { type: "pools", focus: drop.group },
@@ -355,6 +358,10 @@ function saveAdviceScript(): Script {
   }
   const [first, second] = switchable;
   if (first) {
+    groups.push({
+      caption: "Compare",
+      rows: (second ? [first, second] : [first]).map((s) => ({ label: capital(s.name), value: s.costsMonthly, per: "month" as const, tone: "spend" as const }))
+    });
     const lead = { word: first.name.split(" ")[0], target: first.group, figure: { label: `${capital(first.name)} a month`, value: first.costsMonthly } };
     script.push(
       second
@@ -370,13 +377,22 @@ function saveAdviceScript(): Script {
           }
     );
   }
+  const canteen = Math.round(lever(facts.profile.levers.adjustable, "Kantine AG"));
+  const orell = Math.round(lever(facts.profile.levers.flexibleHabits, "Orell Fuessli"));
+  groups.push({
+    caption: "Cut back",
+    rows: [
+      { label: "Canteen", value: canteen, per: "year", tone: "spend" },
+      { label: "Orell Fuessli", value: orell, per: "year", tone: "spend" }
+    ]
+  });
   script.push(
     {
-      say: "You could also cut back a little: the canteen cost 1,616 francs, Orell Fuessli 1,747 this year.",
+      say: `You could also cut back a little: the canteen cost ${francs(canteen)} francs, Orell Fuessli ${francs(orell)} this year.`,
       scene: { type: "pools", focus: "Food and drink" },
       cues: [
-        { word: "canteen", target: "Food and drink", figure: { label: "Canteen in 2025", value: 1616 } },
-        { word: "Orell", target: "Online shopping", figure: { label: "Orell Fuessli in 2025", value: 1747 } }
+        { word: "canteen", target: "Food and drink", figure: { label: "Canteen in 2025", value: canteen } },
+        { word: "Orell", target: "Online shopping", figure: { label: "Orell Fuessli in 2025", value: orell } }
       ]
     },
     {
@@ -389,8 +405,15 @@ function saveAdviceScript(): Script {
       offer: true
     }
   );
-  return script;
+  return { script, keepsake: { kind: "overview", groups } };
 }
+
+/** A lever's yearly cost from facts.json (profile.levers); 0 if the merchant is not there. */
+function lever(list: { merchant: string; yearly: number }[], merchant: string): number {
+  return list.find((l) => l.merchant === merchant)?.yearly ?? 0;
+}
+
+const SAVE_ADVICE = saveAdvice();
 
 const saveTargetAnswer: SideAnswer = {
   id: "save-target",
@@ -524,7 +547,8 @@ export const SIDE_ANSWERS: SideAnswer[] = [
     match: asks(
       /\bhow\s+(can|could|do|should|would)\s+i\s+(save|spend\s+less|cut|put\s+aside|set\s+aside)|\b(save|saving)\s+(more\s+|some\s+)?money\b|\bwhere\s+(can|could|should)\s+i\s+(cut|save|spend\s+less|reduce)|\bwhat\s+(can|could|should)\s+i\s+do\s+(better|differently)|\b(cut|reduce|lower)\s+(down\s+)?(my\s+)?(spending|costs|expenses)\b|\bspend\s+less\b/
     ),
-    script: saveAdviceScript()
+    script: SAVE_ADVICE.script,
+    keep: () => SAVE_ADVICE.keepsake
   },
   {
     // Habits: what the list hides, what changed, the big one-offs and an honest small item. No offer.

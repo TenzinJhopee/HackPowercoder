@@ -39,11 +39,15 @@ export function StatusBar(props: { sound: boolean; scriptOpen: boolean; onSound:
   );
 }
 
-/** Current conversation mode (and backup flag) as a small pill above the step bar. */
-export function ModeLine({ mode, backup }: { mode: ConversationMode; backup: boolean }) {
+/**
+ * Current conversation mode (and backup flag) as a small pill above the step bar.
+ * `started` = the presentation has played at least one beat; before that there is nothing to "continue".
+ */
+export function ModeLine({ mode, backup, started = true }: { mode: ConversationMode; backup: boolean; started?: boolean }) {
+  const text = !started && mode === "waiting" ? "Anything else?" : modeText[mode];
   return (
     <p className="flex min-w-0 items-center gap-2 text-sm font-medium text-ink" aria-live="polite">
-      <span className="truncate">{modeText[mode]}</span>
+      <span className="truncate">{text}</span>
       {backup && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-faint">backup mode</span>}
     </p>
   );
@@ -76,9 +80,10 @@ export function StepBar({ main, side, mode }: { main: Step; side: Step; mode: Co
 
 type Chip = { label: string; run: () => void; primary?: boolean };
 
-export function Chips({ mode, question, onStart, onSay, onResume, onMore, onAnswer }: { mode: ConversationMode; question?: BeatQuestion | null; onStart: () => void; onSay: (text: string) => void; onResume: () => void; onMore: () => void; onAnswer?: (id: string) => void }) {
+export function Chips({ mode, question, started = true, onStart, onSay, onResume, onMore, onAnswer }: { mode: ConversationMode; question?: BeatQuestion | null; started?: boolean; onStart: () => void; onSay: (text: string) => void; onResume: () => void; onMore: () => void; onAnswer?: (id: string) => void }) {
   const ask = (text: string): Chip => ({ label: text, run: () => onSay(text) });
-  const cont: Chip = { label: "OK, let's continue", run: onResume, primary: true };
+  // Before the presentation has started there is nothing to continue: say what the button really does.
+  const cont: Chip = started ? { label: "OK, let's continue", run: onResume, primary: true } : { label: "Start the presentation", run: onStart, primary: true };
   const chips: Record<ConversationMode, Chip[]> = {
     idle: [{ label: "Start the presentation", run: onStart, primary: true }],
     presenting: [ask("Wait, why is September so high?"), ask("Wait, how can I save money?"), ask("Wait, what am I looking at?")],
