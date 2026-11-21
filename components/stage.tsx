@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Figure } from "@/lib/contracts";
 import { swiss } from "./format";
-import type { PlaceholderWorld } from "./placeholder-world";
+import type { GrainWorld } from "@/client/world/grain-world";
 import { StageCanvas } from "./stage-canvas";
 
 export type FigureChange = { seq: number; from: Figure | null; to: Figure };
@@ -54,11 +54,11 @@ function FigureCounter({ change }: { change: FigureChange | null }) {
   );
 }
 
-export function Stage({ world, figure, pausedAt }: { world: PlaceholderWorld; figure: FigureChange | null; pausedAt: string | null }) {
+export function Stage({ world, figure, pausedAt }: { world: GrainWorld; figure: FigureChange | null; pausedAt: string | null }) {
   return (
     <section aria-label="Stage" className="rounded-2xl border border-edge bg-panel p-4">
       <FigureCounter change={figure} />
-      <div className="mt-2 h-56 w-full overflow-hidden rounded-xl bg-night sm:h-72">
+      <div className="mt-2 h-60 w-full overflow-hidden rounded-xl bg-night sm:h-80">
         <StageCanvas world={world} />
       </div>
       <div className="mt-3 flex min-h-[1.75rem] items-center justify-between gap-3">

@@ -2,14 +2,14 @@
 
 /**
  * ALL engine wiring lives in this file. The UI shell only reads what this hook returns.
- * To switch to the real grain world, replace `new PlaceholderWorld()` and the <StageCanvas> in stage.tsx.
+ * The world is the grain world (client/world); <StageCanvas> in stage.tsx hosts its canvas.
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Conversation, Voice, isBackupMode, type EngineEvent, type VoiceStatus } from "@/client";
 import type { Beat, ConversationMode, Figure, Snapshot } from "@/lib/contracts";
 import { MAIN, SIDE_ANSWERS } from "@/content/scripts";
-import { PlaceholderWorld } from "./placeholder-world";
+import { GrainWorld } from "@/client/world/grain-world";
 import type { CaptionLine } from "./caption";
 import type { PlayingScript } from "./script-panel";
 import type { FigureChange } from "./stage";
@@ -89,7 +89,7 @@ export function useAdvisor() {
   const [sound, setSoundState] = useState(true);
   const [voiceLine, setVoiceLine] = useState("Voice: checking…");
   const [online, setOnline] = useState(true);
-  const world = useMemo(() => new PlaceholderWorld(), []);
+  const world = useMemo(() => new GrainWorld(), []);
   const engine = useRef<Conversation | null>(null);
   const voice = useRef<Voice | null>(null);
 
