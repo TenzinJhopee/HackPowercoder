@@ -9,9 +9,11 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "pregen:voice": "tsx scripts/pregen-voice.ts",
-    "db:seed": "tsx scripts/seed-db.ts"
+    "db:seed": "tsx scripts/seed-db.ts",
+    "facts:export": "tsx scripts/export-facts.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.12.0",
     "next": "^16.4.6",
     "papaparse": "^5.4.1",
     "react": "^19.2.9",
