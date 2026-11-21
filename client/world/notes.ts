@@ -3,10 +3,12 @@ import type { Grain } from "./engine";
 
 /**
  * Banknote look for the grain world: each unit (CHF 100) is drawn as a small stylised paper note instead of a dot.
- * Not a real banknote: only the block layout and palette of the 100-franc note are echoed (blue body, a warm band low
- * across the middle, a pale strip at the right end, a deeper block at the left). No text, numerals, artwork, cross,
- * security patterns or signatures. Neutral (paper) notes show that palette; amber/coral/green notes keep the same
- * layout tinted in their own colour, so the colour meaning stays readable at a glance.
+ * Not a real banknote: only the block layout and palettes of the Swiss notes are echoed (a body colour, a deeper block
+ * at the left, a band low across the middle, a pale strip at the right end). No text, numerals, artwork, cross,
+ * globe, security patterns or signatures. Each unit colour maps to one note's palette so the meaning stays readable:
+ * paper/neutral = the 100 (blue), amber spending = the 10 (yellow/orange), coral missing = the 20 (red),
+ * green saved = the 50 (yellow-green). In-between colours (mid-flight) blend the palettes; colours far from every
+ * anchor fall back to the same layout tinted in their own colour.
  * Each look is a small sprite cached per quantised colour (colours interpolate in flight) and drawn with drawImage;
  * below DETAIL_FROM half-width a simpler sprite (body + band) is used.
  *
@@ -36,19 +38,21 @@ const SMALL_W = 16;
 /** New sprites made per frame (a colour transition fills the cache over a few frames; misses draw a plain rect). */
 const NEW_PER_FRAME = 24;
 const MAX_SPRITES = 1536;
-/** Colours within this RGB distance of `theme.paper` blend towards the 100-franc palette. */
-const PAPER_REACH = 90;
-const PAPER = [
-  parseInt(theme.paper.slice(1, 3), 16),
-  parseInt(theme.paper.slice(3, 5), 16),
-  parseInt(theme.paper.slice(5, 7), 16)
-] as const;
-/** 100-franc palette, softened a little for the calm light stage. */
-const CHF_BODY = [64, 136, 194] as const;
-const CHF_DEEP = [40, 94, 150] as const;
-const CHF_BAND_A = [240, 184, 72] as const;
-const CHF_BAND_B = [232, 116, 60] as const;
-const CHF_STRIP = [226, 235, 240] as const;
+/** Colours within this RGB distance of an anchor colour blend towards that note's palette. */
+const REACH = 110;
+const hex = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)] as const;
+/** Note palettes, softened a little for the calm light stage: [body, deep block, band start, band end, strip]. */
+type Palette = readonly (readonly number[])[];
+const NOTES: readonly { at: readonly number[]; pal: Palette }[] = [
+  // 100: blue body, deeper blue block, yellow-to-orange band, pale blue-white strip.
+  { at: hex(theme.paper), pal: [[64, 136, 194], [40, 94, 150], [240, 184, 72], [232, 116, 60], [226, 235, 240]] },
+  // 10: yellow/orange body, warm orange block and band ending grey-blue, pale cream strip.
+  { at: hex(theme.spend), pal: [[238, 164, 36], [220, 112, 28], [242, 128, 44], [150, 162, 180], [250, 238, 206]] },
+  // 20: red/coral body, deeper red block, pink-to-violet band, pale pink strip.
+  { at: hex(theme.coral), pal: [[234, 94, 86], [204, 56, 60], [246, 168, 176], [150, 110, 190], [250, 228, 226]] },
+  // 50: yellow-green body, deeper green block, pale green to red-orange band, pale green strip.
+  { at: hex(theme.saved), pal: [[118, 178, 70], [64, 136, 72], [200, 230, 152], [232, 98, 60], [232, 242, 214]] }
+];
 const EDGE_STYLE = "rgba(11,13,18,0.3)";
 
 type Col = readonly number[];
@@ -62,7 +66,7 @@ const css = (c: Col) => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
 const WHITE = [255, 255, 255] as const;
 const BLACK = [0, 0, 0] as const;
 
-/** One note sprite: the unit's own colour as a tinted layout, blended towards the 100-franc palette near paper. */
+/** One note sprite: block colours blended from the nearby notes' palettes, the rest the unit's own colour tinted. */
 function paintNote(r: number, g: number, b: number, small: boolean): HTMLCanvasElement {
   const W = small ? SMALL_W : SPRITE_W;
   const H = W / 2;
@@ -72,25 +76,38 @@ function paintNote(r: number, g: number, b: number, small: boolean): HTMLCanvasE
   const x = cv.getContext("2d");
   if (!x) return cv;
   const c = [r, g, b];
-  const d = Math.sqrt((r - PAPER[0]) ** 2 + (g - PAPER[1]) ** 2 + (b - PAPER[2]) ** 2);
-  const p = Math.max(0, Math.min(1, 1 - d / PAPER_REACH));
+  const w = NOTES.map((n) => Math.max(0, 1 - Math.sqrt((r - n.at[0]) ** 2 + (g - n.at[1]) ** 2 + (b - n.at[2]) ** 2) / REACH));
+  const sum = w.reduce((a, v) => a + v, 0);
+  if (sum > 1) for (let i = 0; i < w.length; i++) w[i] /= sum;
+  const own = Math.max(0, 1 - sum);
+  /** Colour of block `k`: the tinted fallback weighted by `own`, plus each palette by its weight. */
+  const col = (tint: Col, k: number) => {
+    const o = [tint[0] * own, tint[1] * own, tint[2] * own];
+    for (let i = 0; i < NOTES.length; i++) {
+      const pc = NOTES[i].pal[k];
+      o[0] += pc[0] * w[i];
+      o[1] += pc[1] * w[i];
+      o[2] += pc[2] * w[i];
+    }
+    return css(o);
+  };
   const t = [0, 0, 0];
-  const block = (tint: Col, chf: Col, x0: number, y0: number, x1: number, y1: number) => {
-    x.fillStyle = css(mixTo(tint, chf, p, [0, 0, 0]));
+  const block = (fill: string, x0: number, y0: number, x1: number, y1: number) => {
+    x.fillStyle = fill;
     x.fillRect(x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H);
   };
-  block(c, CHF_BODY, 0, 0, 1, 1);
+  block(col(c, 0), 0, 0, 1, 1);
   if (small) {
-    block(mixTo(c, WHITE, 0.38, t), mixTo(CHF_BAND_A, CHF_BAND_B, 0.5, [0, 0, 0]), 0.34, 0.56, 0.78, 0.9);
+    block(col(mixTo(c, WHITE, 0.4, t), 2), 0.34, 0.56, 0.78, 0.9);
     return cv;
   }
-  block(mixTo(c, BLACK, 0.2, t), CHF_DEEP, 0, 0.56, 0.31, 1);
+  block(col(mixTo(c, BLACK, 0.2, t), 1), 0, 0.56, 0.31, 1);
   const band = x.createLinearGradient(0.34 * W, 0, 0.78 * W, 0);
-  band.addColorStop(0, css(mixTo(mixTo(c, WHITE, 0.45, t), CHF_BAND_A, p, [0, 0, 0])));
-  band.addColorStop(1, css(mixTo(mixTo(c, WHITE, 0.25, t), CHF_BAND_B, p, [0, 0, 0])));
+  band.addColorStop(0, col(mixTo(c, WHITE, 0.45, t), 2));
+  band.addColorStop(1, col(mixTo(c, WHITE, 0.25, t), 3));
   x.fillStyle = band;
   x.fillRect(0.34 * W, 0.56 * H, 0.44 * W, 0.34 * H);
-  block(mixTo(c, WHITE, 0.72, t), CHF_STRIP, 0.79, 0, 1, 1);
+  block(col(mixTo(c, WHITE, 0.72, t), 4), 0.79, 0, 1, 1);
   x.strokeStyle = EDGE_STYLE;
   x.lineWidth = 1;
   x.strokeRect(0.5, 0.5, W - 1, H - 1);
