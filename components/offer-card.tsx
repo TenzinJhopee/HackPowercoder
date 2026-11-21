@@ -11,7 +11,7 @@ export function OfferCard({ confirmed, onConfirm }: { confirmed: boolean; onConf
           <button
             type="button"
             onClick={onConfirm}
-            className="mt-3 w-full rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-brand/20 transition-colors hover:bg-[#c42833] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            className="mt-3 w-full rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-sun shadow-sm shadow-brand/20 transition-colors hover:bg-[#c42833] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
             Tap to confirm
           </button>

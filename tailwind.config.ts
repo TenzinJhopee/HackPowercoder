@@ -5,15 +5,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Luma chrome (from the first prototype)
-        ink: "#142238",
-        muted: "#728096",
-        brand: "#d92e3a",
-        canvas: "#f6f7f9",
-        line: "#e9edf1",
+        // TellHorn brand (from the logo): deep teal and sun yellow
+        ink: "#00323d",
+        muted: "#6f8c92",
+        brand: "#004b5a",
+        "brand-dark": "#003642",
+        sun: "#ffcc00",
+        "sun-deep": "#e6b800",
+        "sun-soft": "#fff3bf",
+        canvas: "#fbf8ec",
+        line: "#e9e3cc",
         // Data colours: same values as components/theme.ts (canvas drawing)
-        soft: "#4a586e",
-        faint: "#66748a",
+        soft: "#3f6670",
+        faint: "#5c7c84",
         spend: "#e08d12",
         coral: "#ec615c",
         saved: "#2fa36b",

@@ -17,7 +17,7 @@ export function Caption({ line }: { line: CaptionLine | null }) {
       >
         {line?.words.map((word, index) => {
           const spoken = index < line.spoken;
-          const color = !spoken ? "text-[#a3aebd]" : cues.has(index) ? "text-spend-ink" : "text-ink";
+          const color = !spoken ? "text-[#a9bcc0]" : cues.has(index) ? "text-spend-ink" : "text-ink";
           return (
             <span key={index} className={`transition-colors duration-150 ${color}`}>
               {word}
