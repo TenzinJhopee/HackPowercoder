@@ -88,7 +88,7 @@ export function CsvImporter({ onClose, onImport }: CsvImporterProps) {
       const result = await onImport(all);
       const invalid = normalized.reduce((count, result) => count + result.errors.length, 0);
       const duplicates = parsedTransactions.length - all.length + result.duplicates;
-      setNotice(`${result.added} transactions added${duplicates ? `, ${duplicates} duplicates skipped` : ""}${invalid ? `, ${invalid} invalid rows skipped` : ""}.`);
+      setNotice(`${result.added} transactions added${duplicates ? `, ${duplicates} duplicates skipped` : ""}${invalid ? `, ${invalid} invalid rows skipped` : ""}. Your saved data now powers your analysis, savings plan, and local AI assistant.`);
       setFiles([]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The CSV files could not be imported.");

@@ -153,7 +153,13 @@ test("voice routes validate payloads and surface upstream failures", async () =>
 
 test("agent endpoint requires explicit consent and uses the local model", async () => {
   await withEnv({}, async () => {
-    const body = { consent: true, question: "How much did I spend?", tool: "get_monthly_spending", toolResult: JSON.stringify({ month: "2026-10", expenses: 80 }) };
+    const body = {
+      consent: true,
+      question: "How much did I spend?",
+      tool: "get_monthly_spending",
+      toolResult: JSON.stringify({ month: "2026-10", expenses: 80 }),
+      analysisContext: JSON.stringify({ currency: "CHF", savingsPlan: { targetGap: 200 } })
+    };
     const missingConsent = await respond(new Request("http://localhost/api/agent/respond", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -208,7 +214,13 @@ test("agent endpoint sends verified context to local Ollama and accepts narrativ
       const response = await respond(new Request("http://localhost/api/agent/respond", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consent: true, question: "How much did I spend?", tool: "get_monthly_spending", toolResult: JSON.stringify({ month: "2026-10", expenses: 80 }) })
+        body: JSON.stringify({
+          consent: true,
+          question: "How much did I spend?",
+          tool: "get_monthly_spending",
+          toolResult: JSON.stringify({ month: "2026-10", expenses: 80 }),
+          analysisContext: JSON.stringify({ currency: "CHF", savingsPlan: { targetGap: 200 } })
+        })
       }));
       const result = await response.json();
       assert.equal(response.status, 200);
@@ -219,6 +231,7 @@ test("agent endpoint sends verified context to local Ollama and accepts narrativ
       assert.equal(ollamaRequest.stream, false);
       assert.match(ollamaRequest.messages[1].content, /get_monthly_spending/);
       assert.match(ollamaRequest.messages[1].content, /2026-10/);
+      assert.match(ollamaRequest.messages[1].content, /targetGap/);
     } finally {
       restoreFetch();
     }

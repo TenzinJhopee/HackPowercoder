@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AudioLines, Bot, LoaderCircle, Mic, Plus, Send, ShieldCheck, Sparkles, Square, Volume2 } from "lucide-react";
+import { AudioLines, Bot, FileUp, LoaderCircle, Mic, Plus, Send, ShieldCheck, Sparkles, Square, Volume2 } from "lucide-react";
 import { FinancialAnswerVisual } from "@/components/financial-answer-visual";
 import { buildAssistantAnalysisContext } from "@/lib/assistant-analysis-context";
 import { create_budget } from "@/lib/financial-tools";
@@ -31,6 +31,7 @@ interface FinancialAgentProps {
   bills: UpcomingBill[];
   savingsTarget?: SavingsTarget;
   onCreateBudgets: (values: Budget[]) => Promise<void>;
+  onOpenImport: () => void;
 }
 
 const suggestedQuestions = [
@@ -117,7 +118,7 @@ function minimizeForProvider(value: unknown): unknown {
     .map(([key, child]) => [key, minimizeForProvider(child)]));
 }
 
-export function FinancialAgent({ transactions, currency, budgets, investments, bills, savingsTarget, onCreateBudgets }: FinancialAgentProps) {
+export function FinancialAgent({ transactions, currency, budgets, investments, bills, savingsTarget, onCreateBudgets, onOpenImport }: FinancialAgentProps) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([{
     id: "welcome",
@@ -421,6 +422,7 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
           {transcribing && <p aria-live="polite" className="mb-2 text-center text-xs text-violet-200/75">Transcribing your question…</p>}
           <form className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#15141c]/95 p-2 shadow-[0_14px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl focus-within:border-violet-300/45" onSubmit={submitForm}>
             <button aria-expanded={showSuggestions} aria-label={showSuggestions ? "Hide quick questions" : "Show quick questions"} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-violet-300 transition hover:bg-white/5 hover:text-violet-100" onClick={() => setShowSuggestions((current) => !current)} type="button"><Plus size={20} /></button>
+            <button aria-label="Upload transaction CSV files" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-violet-300 transition hover:bg-white/5 hover:text-violet-100 disabled:opacity-40" disabled={busy || transcribing || recording} onClick={onOpenImport} title="Upload transaction CSV files" type="button"><FileUp size={18} /></button>
             <input aria-label="Ask the financial assistant" className="h-10 min-w-0 flex-1 bg-transparent px-1 text-sm text-white outline-none placeholder:text-white/40 disabled:opacity-50" disabled={busy || transcribing || recording} maxLength={1000} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => {if (event.key === "Enter" && !event.shiftKey) {event.preventDefault();void submitQuestion(question);}}} placeholder={recording ? "Listening…" : "Type your question here"} value={question} />
             {question.trim()
               ? <button aria-label="Send question" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#17131e] transition hover:bg-violet-100 disabled:opacity-40" disabled={busy || transcribing} type="submit"><Send size={17} /></button>

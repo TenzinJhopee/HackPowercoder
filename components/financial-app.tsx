@@ -525,6 +525,24 @@ function SettingsModal({ transactions, onClose, onClear, onImport }: { transacti
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/35 p-4 backdrop-blur-sm" onClick={onClose}><section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-start justify-between"><div><h2 className="text-lg font-semibold text-ink">Privacy & data</h2><p className="mt-1 text-sm text-slate-500">Your transaction data lives in this browser.</p></div><button aria-label="Close settings" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" onClick={onClose} type="button"><X size={17} /></button></div><div className="mt-5 space-y-3"><div className="flex items-center justify-between rounded-xl bg-slate-50 p-4"><span className="text-sm text-slate-600">Stored transactions</span><span className="text-sm font-semibold text-ink">{transactions.length}</span></div><div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-xs leading-5 text-emerald-800"><ShieldCheck className="mt-0.5 shrink-0" size={15} /><p>CSV files are processed in your browser and stored in IndexedDB. This prototype does not connect to a bank or send transaction data to a server.</p></div><button className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-ink hover:bg-slate-50" onClick={onImport} type="button">Import more CSV files</button><button className="w-full rounded-xl border border-red-100 px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50" disabled={!transactions.length || clearing} onClick={async () => {if (window.confirm("Remove all imported transactions from this browser? This cannot be undone.")){setClearing(true);await onClear();setClearing(false);}}} type="button">{clearing ? "Removing…" : "Delete all local data"}</button></div></section></div>;
 }
 
+function ImportModal({ onClose, onImport }: { onClose: () => void; onImport: (items: Transaction[]) => Promise<{ added: number; duplicates: number }> }) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-ink/35 p-3 backdrop-blur-sm sm:p-5" onClick={onClose}>
+      <section aria-labelledby="import-dialog-title" aria-modal="true" className="my-auto w-full max-w-4xl rounded-2xl bg-white p-5 shadow-2xl sm:p-7" onClick={(event) => event.stopPropagation()} role="dialog">
+        <div className="mb-5 flex items-start justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-brand">Private import</p>
+            <h2 className="mt-1 text-xl font-semibold text-ink" id="import-dialog-title">Add transactions</h2>
+            <p className="mt-1 text-sm text-slate-500">Select the matching columns for each file before import.</p>
+          </div>
+          <button aria-label="Close import dialog" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" onClick={onClose} type="button"><X size={18} /></button>
+        </div>
+        <CsvImporter onClose={onClose} onImport={onImport} />
+      </section>
+    </div>
+  );
+}
+
 export function FinancialApp() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [section, setSection] = useState<Section>("AI Assistant");
@@ -710,7 +728,12 @@ export function FinancialApp() {
   const MainIcon = navigation.find((item) => item.name === section)?.icon ?? Home;
 
   if (section === "AI Assistant") {
-    return <FinancialAgent bills={bills} budgets={budgets} currency={selectedCurrency} investments={investments} onCreateBudgets={createBudgets} savingsTarget={savingsTargets.find((item) => item.currency === selectedCurrency)} transactions={transactions} />;
+    return (
+      <>
+        <FinancialAgent bills={bills} budgets={budgets} currency={selectedCurrency} investments={investments} onCreateBudgets={createBudgets} onOpenImport={() => setImportOpen(true)} savingsTarget={savingsTargets.find((item) => item.currency === selectedCurrency)} transactions={transactions} />
+        {importOpen && <ImportModal onClose={() => setImportOpen(false)} onImport={handleImport} />}
+      </>
+    );
   }
 
   return (
@@ -746,7 +769,7 @@ export function FinancialApp() {
         </main>
       </div>
 
-      {importOpen && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-ink/35 p-3 backdrop-blur-sm sm:p-5" onClick={() => setImportOpen(false)}><section className="my-auto w-full max-w-4xl rounded-2xl bg-white p-5 shadow-2xl sm:p-7" onClick={(event) => event.stopPropagation()}><div className="mb-5 flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-widest text-brand">Private import</p><h2 className="mt-1 text-xl font-semibold text-ink">Add transactions</h2><p className="mt-1 text-sm text-slate-500">Select the matching columns for each file before import.</p></div><button aria-label="Close import dialog" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" onClick={() => setImportOpen(false)} type="button"><X size={18} /></button></div><CsvImporter onClose={() => setImportOpen(false)} onImport={handleImport} /></section></div>}
+      {importOpen && <ImportModal onClose={() => setImportOpen(false)} onImport={handleImport} />}
       {settingsOpen && <SettingsModal onClear={handleClear} onClose={() => setSettingsOpen(false)} onImport={importFromSettings} transactions={transactions} />}
     </div>
   );

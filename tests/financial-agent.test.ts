@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { executeFinancialTool, selectFinancialTool } from "../lib/financial-agent";
+import { buildAssistantAnalysisContext } from "../lib/assistant-analysis-context";
 import { create_budget, get_monthly_spending, get_spending_by_category } from "../lib/financial-tools";
 import { formatMoney } from "../lib/finance";
 import { createFinancialVisualization } from "../lib/financial-visualization";
@@ -60,6 +61,32 @@ test("financial tools calculate selected-currency spending without mixing curren
     netCashFlow: -70
   });
   assert.equal(get_spending_by_category(rows, "CHF").categories[0].value, 80);
+});
+
+test("assistant analysis context summarizes saved data and the savings target without raw transaction details", () => {
+  const rows = [
+    transaction({ id: "private-expense", date: "2026-10-12", merchant: "Private merchant", account: "Private account", amount: -80 }),
+    transaction({ id: "private-income", date: "2026-09-01", type: "income", category: "Income", amount: 3000, originalAmount: 3000 }),
+    transaction({ id: "other-currency", currency: "EUR", amount: -900, originalAmount: 900 })
+  ];
+  const context = buildAssistantAnalysisContext({
+    transactions: rows,
+    currency: "CHF",
+    budgets: [{ id: "CHF:Food", category: "Food", monthlyLimit: 200, actualSpending: 0 }],
+    investments: [],
+    bills: [],
+    savingsTarget: { currency: "CHF", monthlyAmount: 500 },
+    asOf: new Date("2026-10-31T12:00:00.000Z")
+  });
+  const serialized = JSON.stringify(context);
+  assert.equal(context.importedTransactionCount, 2);
+  assert.equal(context.period.monthsAnalyzed, 2);
+  assert.equal(context.savingsPlan.targetMonthlySavings, 500);
+  assert.deepEqual(context.budgetLimits, [{ category: "Food", monthlyLimit: 200 }]);
+  assert.equal(serialized.includes("private-expense"), false);
+  assert.equal(serialized.includes("Private merchant"), false);
+  assert.equal(serialized.includes("Private account"), false);
+  assert.equal(serialized.includes("other-currency"), false);
 });
 
 test("category answer visuals use verified totals and group smaller categories", () => {

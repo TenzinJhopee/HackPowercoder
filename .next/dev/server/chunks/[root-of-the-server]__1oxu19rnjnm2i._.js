@@ -82,6 +82,7 @@ const requestSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modul
     consent: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z__$2e$literal$3e$__["z"].literal(true),
     question: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z__$2e$string$3e$__["z"].string().trim().min(1).max(1000),
     tool: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z__$2e$enum$3e$__["z"].enum(__TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$financial$2d$agent$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["financialToolNames"]),
+    analysisContext: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z__$2e$string$3e$__["z"].string().max(8000).optional(),
     toolResult: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z__$2e$string$3e$__["z"].string().min(2).max(12_000).superRefine((value, context)=>{
         try {
             JSON.parse(value);
@@ -111,7 +112,7 @@ async function POST(request) {
         status: 400
     });
     try {
-        const explanation = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$llm$2f$provider$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["explainFinancialToolResult"])(parsed.data.question, parsed.data.tool, parsed.data.toolResult);
+        const explanation = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$llm$2f$provider$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["explainFinancialToolResult"])(parsed.data.question, parsed.data.tool, parsed.data.toolResult, parsed.data.analysisContext);
         return Response.json({
             explanation,
             provider: "ollama"
@@ -138,9 +139,9 @@ __turbopack_context__.s([
 ]);
 const financialAgentSystemPrompt = `You are the PostFinance Financial Intelligence Agent, a friendly and careful financial information assistant for an independent prototype. You are not a licensed financial adviser.
 
-Use only the deterministic tool result included with the current question for personal financial facts. Do not infer or invent transactions, amounts, account balances, investment prices, returns, or performance. Internal transfers are excluded from income and spending. Refunds are not earned income. Currency totals are separate unless the tool explicitly says otherwise. Forecasts are estimates, never guaranteed balances.
+Use only the deterministic tool result and current financial analysis snapshot included with the question for personal financial facts. They are aggregated from records saved on this device; individual transaction rows are not sent. Do not infer or invent transactions, amounts, account balances, investment prices, returns, or performance. Internal transfers are excluded from income and spending. Refunds are not earned income. Currency totals are separate unless the tool explicitly says otherwise. Forecasts are estimates, never guaranteed balances.
 
-Write in natural, fluent conversational English and answer the user's question directly. Avoid robotic or canned introductions, and do not mention tools, models, or that figures are shown elsewhere. Explain the result in plain language, name important assumptions and uncertainty, and suggest practical next steps without pressure. Never offer to execute financial actions, move money, or change an account; the application cannot do those things. For brainstorming requests such as affordable meal ideas, offer a few practical options using common ingredients, use unnumbered bullets, omit prices and financial estimates, and ask about dietary needs when relevant. Treat these ideas as general suggestions, not facts about the user's purchases. If required information is absent, say so and ask a concise clarifying question when useful.
+Write in natural, fluent conversational English and answer the user's question directly. Avoid robotic or canned introductions, and do not mention tools, models, or that figures are shown elsewhere. Explain the result in plain language, name important assumptions and uncertainty, and suggest practical next steps without pressure. For savings questions, use the supplied savings target and evidence-backed opportunities; only discuss spending categories present in the analysis snapshot. Never offer to execute financial actions, move money, or change an account; the application cannot do those things. For brainstorming requests such as affordable meal ideas, offer a few practical options using common ingredients, use unnumbered bullets, omit prices and financial estimates, and ask about dietary needs when relevant. Treat these ideas as general suggestions, not facts about the user's purchases. If required information is absent, say so and ask a concise clarifying question when useful.
 
 The application separately displays the exact verified figures from its local calculation. In your response, provide a short explanation of what those figures mean; do not repeat or create numbers, currencies, percentages, dates, merchant names, or performance claims.`;
 }),
@@ -1315,8 +1316,9 @@ async function getOllamaConnectionStatus() {
         };
     }
 }
-async function explainFinancialToolResult(question, tool, toolResult) {
+async function explainFinancialToolResult(question, tool, toolResult, analysisContext) {
     const { base, model } = getOllamaConfig();
+    const analysisSummary = analysisContext?.trim() ? `\nCurrent financial analysis snapshot (verified local aggregates): ${analysisContext}` : "";
     let response;
     try {
         response = await fetch(new URL("/api/chat", base), {
@@ -1337,7 +1339,7 @@ async function explainFinancialToolResult(question, tool, toolResult) {
                     },
                     {
                         role: "user",
-                        content: `User question: ${question}\nSelected deterministic tool: ${tool}\nTool result (verified, JSON): ${toolResult}`
+                        content: `User question: ${question}\nSelected deterministic tool: ${tool}\nTool result (verified, JSON): ${toolResult}${analysisSummary}`
                     }
                 ]
             }),
