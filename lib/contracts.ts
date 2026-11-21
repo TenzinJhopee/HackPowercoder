@@ -35,12 +35,18 @@ export type Beat = {
   offer?: boolean;
   /** Main beats only: said when resuming at this beat after an interruption. */
   bridge?: string;
-  /** Main beats only: the line asks the user; the conversation waits in `answering` until one of these is chosen. */
+  /**
+   * Main beats only: the line asks the user. The conversation pauses briefly in `answering`, then goes on by itself;
+   * the question stays on screen as an open point that can be answered any time.
+   */
   question?: BeatQuestion;
 };
 
-/** `subject` is the facts insight id the answer is saved under (POST /api/notes). */
-export type BeatQuestion = { subject: string; answers: BeatAnswer[] };
+/**
+ * `subject` is the facts insight id the answer is saved under (POST /api/notes).
+ * `label`: the open point's 2-4 word name. `assume`: one short sentence, how the advisor works while it is unanswered.
+ */
+export type BeatQuestion = { subject: string; label: string; assume: string; answers: BeatAnswer[] };
 /** `id` is the machine answer saved in notes; `kind` matches spoken "yes"/"no" replies; `skipOffer` skips the offer beat. */
 export type BeatAnswer = { id: string; label: string; kind: "yes" | "no"; skipOffer?: boolean };
 

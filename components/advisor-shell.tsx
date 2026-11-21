@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Caption } from "./caption";
 import { Chips, InputRow, ModeLine, StatusBar, StepBar, useInputFocus } from "./controls";
 import { OfferCard } from "./offer-card";
+import { OpenPoints } from "./open-points";
 import { SavingsSlip } from "./savings-slip";
 import { ScriptPanel } from "./script-panel";
 import { Stage } from "./stage";
@@ -80,6 +81,8 @@ export function AdvisorShell() {
               onMicUp={mic.stop}
               inputRef={input.ref}
             />
+            {/* In the side column (below the stage on phones): it grows the column, never the stage's fixed-height canvas. */}
+            {advisor.points.length > 0 && <OpenPoints points={advisor.points} onAnswer={advisor.answer} />}
             {advisor.slip && <SavingsSlip slip={advisor.slip} onClose={advisor.closeSlip} />}
             <p className="text-xs leading-5 text-faint">
               {liveText} · {advisor.availability.voiceLine} · {micText}

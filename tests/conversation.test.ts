@@ -83,37 +83,46 @@ test("interrupt, ask, resume: fast path focus, bridge, replay of the interrupted
   assert.equal(talk.mode, "finished");
 });
 
+const QUESTION_SCRIPT: Script = [
+  { say: "Here is your whole year at a glance.", scene: { type: "galaxy" } },
+  {
+    say: "Do you keep a pillar 3a account elsewhere?",
+    scene: { type: "jars" },
+    question: {
+      subject: "no_pillar_3a",
+      label: "Pillar 3a and savings",
+      assume: "Until you tell me, I keep the pillar 3a option in the plan.",
+      answers: [
+        { id: "has_elsewhere", label: "Yes, at another bank", kind: "yes", skipOffer: true },
+        { id: "none", label: "No, I have none", kind: "no" },
+      ],
+    },
+  },
+  { say: "If you like, 200 francs a month into pillar 3a.", scene: { type: "jars" }, offer: true },
+  { say: "That was your year.", scene: { type: "galaxy" } },
+];
+
+/** A notes endpoint that is offline: logs each POST, then fails. */
+const offlineNotes = (notes: string[]) =>
+  (async (input: RequestInfo | URL, init?: RequestInit) => {
+    notes.push(`${String(input)} ${String(init?.body)}`);
+    throw new TypeError("offline");
+  }) as typeof fetch;
+
 test("question beat: pause, answer, save note (offline), continue, offer skipped", async () => {
   const log: string[] = [];
   const world = new StubWorld({ log });
   const voice = new FakeVoice(log, () => false);
   const notes: string[] = [];
-  const offline = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    notes.push(`${String(input)} ${String(init?.body)}`);
-    throw new TypeError("offline");
-  }) as typeof fetch;
-  const script: Script = [
-    { say: "Here is your whole year at a glance.", scene: { type: "galaxy" } },
-    {
-      say: "Do you keep a pillar 3a account elsewhere?",
-      scene: { type: "jars" },
-      question: {
-        subject: "no_pillar_3a",
-        answers: [
-          { id: "has_elsewhere", label: "Yes, at another bank", kind: "yes", skipOffer: true },
-          { id: "none", label: "No, I have none", kind: "no" },
-        ],
-      },
-    },
-    { say: "If you like, 200 francs a month into pillar 3a.", scene: { type: "jars" }, offer: true },
-    { say: "That was your year.", scene: { type: "galaxy" } },
-  ];
-  const talk = new Conversation({ world, voice, main: script, fetch: offline, backup: true });
+  const offline = offlineNotes(notes);
+  const script = QUESTION_SCRIPT;
+  // A long pause: the answer, not the clock, moves the presentation on.
+  const talk = new Conversation({ world, voice, main: script, fetch: offline, backup: true, questionPauseMs: 60_000 });
   const offers: unknown[] = [];
   talk.on((event) => event.type === "offer" && offers.push(event));
 
-  await talk.start();
-  assert.equal(talk.mode, "answering");
+  void talk.start();
+  await until(() => talk.mode === "answering");
   assert.ok(!log.includes(`say:${script[2].say}`));
 
   assert.equal(talk.input("Yes, from my other account"), "continue");
@@ -125,11 +134,39 @@ test("question beat: pause, answer, save note (offline), continue, offer skipped
   assert.ok(log.includes(`say:${script[3].say}`));
 
   // "No" keeps the offer.
-  const again = new Conversation({ world, voice, main: script, fetch: offline, backup: true });
-  await again.start();
+  const again = new Conversation({ world, voice, main: script, fetch: offline, backup: true, questionPauseMs: 60_000 });
+  void again.start();
+  await until(() => again.mode === "answering");
   again.input("No");
   await until(() => again.mode === "finished");
   assert.ok(log.filter((l) => l === `say:${script[2].say}`).length === 1, "offer beat played after no");
+});
+
+test("unanswered question: the presentation goes on by itself; the open point is answered later without replaying", async () => {
+  const log: string[] = [];
+  const notes: string[] = [];
+  const talk = new Conversation({ world: new StubWorld({ log }), voice: new FakeVoice(log, () => false), main: QUESTION_SCRIPT, fetch: offlineNotes(notes), backup: true, questionPauseMs: 5 });
+  let points: import("../client/events").OpenPoint[] = [];
+  let offers = 0;
+  talk.on((event) => {
+    if (event.type === "openPoints") points = event.points;
+    if (event.type === "offer") offers++;
+  });
+
+  await talk.start();
+  assert.equal(talk.mode, "finished");
+  assert.deepEqual(points.map((p) => [p.subject, p.label, p.answer]), [["no_pillar_3a", "Pillar 3a and savings", null]]);
+  assert.ok(log.includes(`say:${QUESTION_SCRIPT[2].say}`) && offers === 1, "unanswered: the offer beat plays");
+  assert.ok(log.includes(`say:${QUESTION_SCRIPT[3].say}`));
+  assert.equal(notes.length, 0);
+
+  const spoken = log.filter((l) => l.startsWith("say:")).length;
+  await talk.answer("has_elsewhere", "no_pillar_3a");
+  assert.equal(notes.length, 1);
+  assert.ok(notes[0].includes('"subject":"no_pillar_3a"') && notes[0].includes('"answer":"has_elsewhere"'));
+  assert.equal(points[0].answer, "has_elsewhere");
+  assert.equal(talk.mode, "finished");
+  assert.equal(log.filter((l) => l.startsWith("say:")).length, spoken, "recording an answer says nothing");
 });
 
 test("intent rules", () => {
@@ -231,4 +268,24 @@ test("the savings answer emits its plan; the slip reveals a line per beat and st
     slip = keepReducer(slip, e);
   }
   assert.equal(slip?.revealed, plan.cuts.length + 1, "later answers leave the slip alone");
+});
+
+test("a specific month question goes to the director first; the fixed answer is the fallback", async () => {
+  const prepared = [{ match: (q: string) => /june/i.test(q), live: (q: string) => /digitec/i.test(q), lead: ["Sure, June."], script: [{ say: "June had the bike." }] }];
+  const run = async (question: string, response: unknown) => {
+    const log: string[] = [];
+    const fetcher = (async (input: RequestInfo | URL) => {
+      log.push(`fetch:${String(input)}`);
+      return new Response(JSON.stringify(response), { status: 200 });
+    }) as typeof fetch;
+    const talk = new Conversation({ world: new StubWorld({ log }), voice: new FakeVoice(log, () => false), main: MAIN, prepared, fetch: fetcher, backup: false });
+    await talk.ask(question);
+    return log;
+  };
+  const model = await run("How much at Digitec in June?", { script: [{ say: "Digitec came to a small sum." }], source: "model" });
+  assert.ok(model.includes("fetch:/api/director") && model.includes("say:Digitec came to a small sum.") && !model.includes("say:June had the bike."));
+  const failed = await run("How much at Digitec in June?", { script: [{ say: "x" }], source: "fallback", error: "timeout" });
+  assert.ok(failed.includes("fetch:/api/director") && failed.includes("say:June had the bike.") && !failed.includes("say:Sure, June."));
+  const story = await run("Why was June so high?", { script: [{ say: "never" }], source: "model" });
+  assert.ok(!story.includes("fetch:/api/director") && story.includes("say:Sure, June.") && story.includes("say:June had the bike."));
 });

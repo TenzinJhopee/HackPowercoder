@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Conversation, Voice, isBackupMode, type EngineEvent, type VoiceStatus } from "@/client";
+import { Conversation, Voice, isBackupMode, type EngineEvent, type OpenPoint, type VoiceStatus } from "@/client";
 import type { Beat, BeatQuestion, ConversationMode, Figure, Snapshot } from "@/lib/contracts";
 import { MAIN, SIDE_ANSWERS } from "@/content/scripts";
 import { GrainWorld } from "@/client/world/grain-world";
@@ -32,6 +32,8 @@ type State = {
   offer: Beat | null;
   offerConfirmed: boolean;
   question: BeatQuestion | null;
+  /** Questions asked so far, with their assumptions; stay to the end, cleared on start over. */
+  points: OpenPoint[];
   /** The savings slip: stays until the user closes it or starts over. */
   slip: KeptSlip | null;
   error: string | null;
@@ -48,6 +50,7 @@ const initialState: State = {
   offer: null,
   offerConfirmed: false,
   question: null,
+  points: [],
   slip: null,
   error: null
 };
@@ -87,6 +90,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, playing: { kind: event.kind, script: event.script, source: event.source } };
     case "question":
       return { ...state, question: event.question };
+    case "openPoints":
+      return { ...state, points: event.points };
     case "error":
       return { ...state, error: event.message };
     default:
@@ -149,7 +154,8 @@ export function useAdvisor() {
   /** Any typed, spoken or chip text; the engine classifies it (continue / wait / end / question). */
   const say = useCallback((text: string) => void engine.current?.input(text), []);
   const resume = useCallback(() => void engine.current?.resume(), []);
-  const answer = useCallback((id: string) => void engine.current?.answer(id), []);
+  /** Without `subject`: the question being asked now. With it: any open point, recorded without touching playback. */
+  const answer = useCallback((id: string, subject?: string) => void engine.current?.answer(id, subject), []);
   const confirmOffer = useCallback(() => {
     engine.current?.confirmOffer(OFFER_JAR, OFFER_FIGURE);
     dispatch({ type: "confirmed" });
@@ -171,6 +177,7 @@ export function useAdvisor() {
     offer: state.offer,
     offerConfirmed: state.offerConfirmed,
     question: state.question,
+    points: state.points,
     slip: state.slip,
     error: state.error,
     world,

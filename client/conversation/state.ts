@@ -3,6 +3,7 @@ import {
   DEFAULT_BRIDGE,
   DIRECTOR_FAILURE_LINE,
   FILLER_LINES,
+  type BeatQuestion,
   type ConversationMode,
   type DirectorRequest,
   type DirectorResponse,
@@ -14,7 +15,7 @@ import {
   type World,
 } from "@/lib/contracts";
 import type { Keepsake } from "@/lib/savings-plan";
-import { Emitter, type EngineListener } from "../events";
+import { Emitter, type EngineListener, type OpenPoint } from "../events";
 import { Player } from "../player/player";
 import { isBackupMode, type Speaker } from "../player/voice";
 import { classify, matchAnswer, targetIn } from "./intent";
@@ -27,6 +28,11 @@ export type PreparedAnswer = {
   keep?: (question: string) => Keepsake | null;
   /** Short reactions spoken before the answer, rotated. */
   lead?: readonly string[];
+  /**
+   * True when the question asks for more than this fixed answer tells (a merchant, a date, the card bill...):
+   * the live director goes first and this answer is the fallback. Ignored in backup mode.
+   */
+  live?: (question: string) => boolean;
 };
 
 export type ConversationOptions = {
@@ -45,6 +51,8 @@ export type ConversationOptions = {
   directorTimeoutMs?: number;
   /** The data the current scene shows, sent as ScreenContext.visible. */
   visible?: () => unknown;
+  /** How long a question beat waits for an answer before the presentation goes on by itself. Default 3500. */
+  questionPauseMs?: number;
 };
 
 const isScript = (value: unknown): value is Script =>
@@ -62,8 +70,13 @@ export class Conversation {
   private readonly notesUrl: string;
   private readonly directorTimeoutMs: number;
   private readonly visible?: () => unknown;
+  private readonly questionPauseMs: number;
   private readonly events = new Emitter();
   private directorAbort: AbortController | null = null;
+  /** The running pause after a question beat; ended early whenever another flow starts. */
+  private pause: { timer: ReturnType<typeof setTimeout>; done: () => void } | null = null;
+  /** Every question asked since the start, answered or not (shown as open points). */
+  private points: OpenPoint[] = [];
 
   mode: ConversationMode = "idle";
   /** Saved at interruption; one level deep. */
@@ -93,6 +106,7 @@ export class Conversation {
     this.notesUrl = options.notesUrl ?? "/api/notes";
     this.directorTimeoutMs = options.directorTimeoutMs ?? 12000;
     this.visible = options.visible;
+    this.questionPauseMs = options.questionPauseMs ?? 3500;
     this.player = new Player({ world: options.world, voice: options.voice, emit: this.events.emit });
   }
 
@@ -106,22 +120,32 @@ export class Conversation {
     this.setSnapshot(null);
     this.setAsking(null);
     this.skipOffer = false;
+    this.points = [];
+    this.emitPoints();
     return this.playMain(0);
   }
 
-  /** Answer chip or matched reply to a question beat: save it (best effort), then continue the main script. */
-  answer(id: string): Promise<void> {
+  /**
+   * Answer to a question: save it (best effort) and mark its open point answered. Without `subject` (or with the
+   * subject being asked right now, during its pause) the presentation goes on at once; any other open point is only recorded.
+   */
+  answer(id: string, subject?: string): Promise<void> {
     const index = this.asking;
-    const question = index !== null ? this.main[index]?.question : undefined;
-    const chosen = question?.answers.find((a) => a.id === id);
-    if (index === null || !question || !chosen) return Promise.resolve();
-    this.setAsking(null);
-    if (chosen.skipOffer) this.skipOffer = true;
+    const asked = index !== null ? this.main[index]?.question : undefined;
+    const key = subject ?? asked?.subject;
+    const point = this.points.find((p) => p.subject === key);
+    const chosen = point?.answers.find((a) => a.id === id);
+    if (!point || !chosen) return Promise.resolve();
+    this.points = this.points.map((p) => (p === point ? { ...p, answer: chosen.id } : p));
+    this.skipOffer = this.points.some((p) => p.answers.some((a) => a.id === p.answer && a.skipOffer));
+    this.emitPoints();
     void this.fetcher(this.notesUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject: question.subject, answer: chosen.id, text: chosen.label }),
+      body: JSON.stringify({ subject: point.subject, answer: chosen.id, text: chosen.label }),
     }).catch(() => undefined);
+    if (index === null || asked?.subject !== point.subject || this.mode !== "answering") return Promise.resolve();
+    this.setAsking(null);
     return this.playMain(index + 1);
   }
 
@@ -132,6 +156,11 @@ export class Conversation {
   interrupt(invite = false): void {
     if (this.mode === "listening") {
       this.player.cancel();
+      return;
+    }
+    if (this.mode === "answering") {
+      // Mic or "wait" during a question's pause: stop the clock, so the presentation waits for her reply.
+      this.cancel();
       return;
     }
     if (this.mode === "presenting" || this.mode === "returning") this.setSnapshot(this.takeSnapshot());
@@ -179,15 +208,23 @@ export class Conversation {
       }
     });
     const preparedScript = prepared && (typeof prepared.script === "function" ? prepared.script(question) : prepared.script);
-    if (preparedScript) {
-      this.events.emit({ type: "script", kind: "side", script: preparedScript, source: "prepared" });
+    const playPrepared = async (script: Script, withLead: boolean): Promise<void> => {
+      this.events.emit({ type: "script", kind: "side", script, source: "prepared" });
       const keepsake = prepared?.keep?.(question);
       if (keepsake) this.events.emit({ type: "keep", keepsake });
       // A person reacts first: a short lead-in that names the topic, while the zoom above already runs.
-      if (prepared?.lead?.length && !(await this.player.speak(this.pick(prepared.lead), my, "filler"))) return;
-      if (!(await this.playSide(preparedScript, my))) return;
-      return this.finishSide(my, preparedScript);
+      if (withLead && prepared?.lead?.length && !(await this.player.speak(this.pick(prepared.lead), my, "filler"))) return;
+      if (!(await this.playSide(script, my))) return;
+      return this.finishSide(my, script);
+    };
+    // A question more specific than the fixed answer goes to the live director; the fixed answer stays as the fallback.
+    let liveFirst = false;
+    try {
+      liveFirst = !this.backup && !!prepared?.live?.(question);
+    } catch {
+      liveFirst = false;
     }
+    if (preparedScript && !liveFirst) return playPrepared(preparedScript, true);
 
     if (this.backup) {
       if (!(await this.player.speak(BACKUP_NO_ANSWER_LINE, my, "failure"))) return;
@@ -199,6 +236,8 @@ export class Conversation {
     if (!(await this.player.speak(FILLER_LINES[this.fillerIndex++ % FILLER_LINES.length], my, "filler"))) return;
     const response = await answer;
     if (!this.player.isCurrent(my)) return;
+    // The filler line was already spoken, so the fallback starts without its lead-in.
+    if (preparedScript && (!response || !isScript(response.script) || response.source === "fallback")) return playPrepared(preparedScript, false);
     if (!response || !isScript(response.script)) {
       if (response?.error) this.events.emit({ type: "error", message: response.error });
       if (!(await this.player.speak(DIRECTOR_FAILURE_LINE, my, "failure"))) return;
@@ -279,6 +318,7 @@ export class Conversation {
   // ---------- internals ----------
 
   private async playMain(from: number, token?: number): Promise<void> {
+    this.endPause();
     const my = token !== undefined && this.player.isCurrent(token) ? token : this.player.begin();
     this.setMode("presenting");
     this.mainDone = false;
@@ -290,9 +330,14 @@ export class Conversation {
       const ok = await this.player.playBeat(beat, my, { kind: "main", beatIndex: i, beatCount: this.main.length });
       if (!ok) return;
       if (beat.question) {
+        // Asked once, never blocking: a short pause for a reply, then on by itself; the point stays open on screen.
+        const point = this.addPoint(beat.question);
+        if (point.answer !== null) continue;
         this.setAsking(i);
         this.setMode("answering");
-        return;
+        if (!(await this.hold(this.questionPauseMs, my))) return;
+        this.setAsking(null);
+        this.setMode("presenting");
       }
     }
     if (!(await this.sayConfirmed(my))) return;
@@ -326,6 +371,42 @@ export class Conversation {
     return lines[i % lines.length];
   }
 
+  /** Waits `ms`, or less when another flow starts (endPause). True while `my` is still the current flow. */
+  private async hold(ms: number, my: number): Promise<boolean> {
+    this.endPause();
+    await new Promise<void>((done) => {
+      const timer = setTimeout(() => {
+        this.pause = null;
+        done();
+      }, ms);
+      this.pause = { timer, done };
+    });
+    return this.player.isCurrent(my);
+  }
+
+  /** Ends a running question pause now (its flow then finds its token stale and stops). */
+  private endPause(): void {
+    const pause = this.pause;
+    if (!pause) return;
+    this.pause = null;
+    clearTimeout(pause.timer);
+    pause.done();
+  }
+
+  /** Adds an asked question to the open points (once per subject; a replayed question keeps its answer). */
+  private addPoint(question: BeatQuestion): OpenPoint {
+    const known = this.points.find((p) => p.subject === question.subject);
+    if (known) return known;
+    const point: OpenPoint = { subject: question.subject, label: question.label, assume: question.assume, answers: question.answers, answer: null };
+    this.points = [...this.points, point];
+    this.emitPoints();
+    return point;
+  }
+
+  private emitPoints(): void {
+    this.events.emit({ type: "openPoints", points: this.points });
+  }
+
   private setAsking(index: number | null): void {
     if (index === this.asking) return;
     this.asking = index;
@@ -355,6 +436,7 @@ export class Conversation {
 
   private cancel(soft = false): void {
     this.player.cancel(soft);
+    this.endPause();
     this.directorAbort?.abort();
     this.directorAbort = null;
   }
