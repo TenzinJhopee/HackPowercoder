@@ -7,6 +7,7 @@ import { OfferCard } from "./offer-card";
 import { ScriptPanel } from "./script-panel";
 import { Stage } from "./stage";
 import { useAdvisor } from "./use-advisor";
+import { Welcome } from "./welcome";
 import { useSpeechInput } from "./use-speech-input";
 
 /**
@@ -50,20 +51,27 @@ export function AdvisorShell() {
         <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start lg:gap-6">
           <Stage world={advisor.world} figure={advisor.figure} pausedAt={pausedAt} />
           <div className="flex min-w-0 flex-col gap-4">
-            <Caption line={advisor.line} />
-            {advisor.offer && <OfferCard confirmed={advisor.offerConfirmed} onConfirm={advisor.confirmOffer} />}
-            <Chips
-              mode={advisor.mode}
-              question={advisor.question}
-              onAnswer={advisor.answer}
-              onStart={advisor.start}
-              onSay={advisor.say}
-              onResume={advisor.resume}
-              onMore={() => {
-                advisor.interrupt();
-                input.focus();
-              }}
-            />
+            {advisor.mode === "idle" ? (
+              <Welcome onSay={advisor.say} onStart={advisor.start} />
+            ) : (
+              <>
+                <Caption line={advisor.line} />
+                {advisor.offer && <OfferCard confirmed={advisor.offerConfirmed} onConfirm={advisor.confirmOffer} />}
+                <Chips
+                  mode={advisor.mode}
+                  canContinue={snapshot !== null}
+                  question={advisor.question}
+                  onAnswer={advisor.answer}
+                  onStart={advisor.start}
+                  onSay={advisor.say}
+                  onResume={advisor.resume}
+                  onMore={() => {
+                    advisor.interrupt();
+                    input.focus();
+                  }}
+                />
+              </>
+            )}
             <InputRow
               mode={advisor.mode}
               micSupported={mic.supported}
