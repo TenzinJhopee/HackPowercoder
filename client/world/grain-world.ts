@@ -1,7 +1,7 @@
 import type { Breakdown, SceneType, World } from "@/lib/contracts";
-import { pickChoreo, pickFocusStyle, type ChoreoName, type FocusStyle } from "./choreo";
+import { SETTLE, pickChoreo, pickFocusStyle, type ChoreoName, type FocusStyle } from "./choreo";
 import { Engine } from "./engine";
-import type { ApplyKind, Category, Scene, SceneEnv, WorldFacts } from "./scenes/base";
+import { SETTLE_MS, type ApplyKind, type Category, type Scene, type SceneEnv, type WorldFacts } from "./scenes/base";
 import { GalaxyScene } from "./scenes/galaxy";
 import { JarsScene, jarName } from "./scenes/jars";
 import { LevelScene } from "./scenes/level";
@@ -38,6 +38,9 @@ export class GrainWorld implements World {
   private filled = new Set<string>();
   private type: SceneType | null = null;
   private scene: Scene | null = null;
+  /** performance.now() when the current entrance has landed; state changes before it wait (cue words often come early). */
+  private settleAt = 0;
+  private pending: ReturnType<typeof setTimeout> | null = null;
   private entered = false;
   private loading: Promise<void> | null = null;
   // Variety guard (pfagent.md 7): the last choreography and focus look, so neither repeats immediately.
@@ -215,6 +218,21 @@ export class GrainWorld implements World {
       kind = "enter";
       this.entered = true;
     }
+    const now = performance.now();
+    // A focus, breakdown or ghost during an entrance would re-place grains still flying in and point the camera at
+    // something not formed yet: apply it once the entrance lands. The state is already set, so one later run covers all.
+    if (kind === "update" && now < this.settleAt) {
+      this.pending ??= setTimeout(() => {
+        this.pending = null;
+        this.run("update");
+      }, this.settleAt - now);
+      return;
+    }
+    if (this.pending && kind !== "resize") {
+      clearTimeout(this.pending);
+      this.pending = null;
+    }
+    if (kind === "enter") this.settleAt = now + (this.engine.reduced ? 300 : scene.entrance ? SETTLE[scene.entrance.name] : SETTLE_MS.enter);
     this.engine.layer = scene;
     scene.apply(kind);
   }

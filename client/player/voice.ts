@@ -472,7 +472,8 @@ export class Voice implements Speaker {
     // Calm advisor pace; the default rate sounds rushed.
     utterance.rate = 0.9;
     // Some voices never send boundary events: an estimated clock drives the words until one arrives.
-    const estimate = estimateTimings(text).map((t) => t.start);
+    // The estimate is for rate 1, so it is stretched to the slower speaking rate.
+    const estimate = estimateTimings(text).map((t) => t.start / utterance.rate);
 
     return new Promise<boolean | null>((resolve) => {
       let done = false;
