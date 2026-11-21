@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { BeatQuestion, ConversationMode } from "@/lib/contracts";
 import { AFFORD_EXAMPLE } from "@/content/scripts";
 import { STARTER_QUESTIONS } from "./welcome";
@@ -69,27 +69,95 @@ export function ProgressPill({ mode, backup, main, side }: { mode: ConversationM
   );
 }
 
-type Chip = { label: string; run: () => void; primary?: boolean };
+/** An action is something to press now (continue, answer, start); a question is a suggestion for the menu. */
+type Chip = { label: string; run: () => void; kind: "action" | "question"; primary?: boolean };
+
+/**
+ * Suggested questions in one drop-down instead of a column of buttons: a single small button, the list opens
+ * upwards over the conversation, closes on a choice, a click outside or Escape.
+ */
+function QuestionMenu({ questions }: { questions: Chip[] }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={root} className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className={`flex items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink shadow-sm transition-colors hover:border-brand/40 hover:bg-sun-soft ${focusRing}`}
+      >
+        <span>Suggested questions</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={`transition-transform ${open ? "rotate-180" : ""}`}>
+          <path d="m6 15 6-6 6 6" />
+        </svg>
+      </button>
+      {open && (
+        <ul role="menu" className="absolute bottom-full left-0 z-30 mb-2 max-h-72 w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-line bg-surface p-1.5 shadow-xl shadow-ink/10">
+          {questions.map((question) => (
+            <li key={question.label} role="none">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  question.run();
+                }}
+                className="w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium text-ink transition-colors hover:bg-sun-soft focus-visible:bg-sun-soft focus-visible:outline-none"
+              >
+                {question.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export function Chips({ mode, canContinue, question, onStart, onSay, onResume, onMore, onAnswer }: { mode: ConversationMode; /** A main beat is paused, so "continue" has something to resume. */ canContinue: boolean; question?: BeatQuestion | null; onStart: () => void; onSay: (text: string) => void; onResume: () => void; onMore: () => void; onAnswer?: (id: string) => void }) {
-  const ask = (text: string): Chip => ({ label: text, run: () => onSay(text) });
-  const cont: Chip = { label: "OK, let's continue", run: onResume, primary: true };
+  const ask = (text: string): Chip => ({ label: text, run: () => onSay(text), kind: "question" });
+  const action = (label: string, run: () => void, primary = false): Chip => ({ label, run, kind: "action", primary });
+  const cont = action("OK, let's continue", onResume, true);
   // Without a paused presentation "continue" would restart it, so offer other questions instead.
   const more = STARTER_QUESTIONS.map((q) => ask(q.text));
-  const walk: Chip = { label: "Walk me through my year", run: onStart, primary: true };
+  const walk = action("Walk me through my year", onStart, true);
   const chips: Record<ConversationMode, Chip[]> = {
-    idle: [{ label: "Start the presentation", run: onStart, primary: true }],
+    idle: [action("Start the presentation", onStart, true)],
     presenting: [ask("Wait, why is September so high?"), ask("Wait, how can I save money?"), ask("Wait, what am I looking at?")],
     listening: [ask("Why is September so high?"), ask("Why was November high?"), ask("How can I save money?"), ask("What are my spending habits?"), ask(AFFORD_EXAMPLE), ...(canContinue ? [cont] : [])],
     side: canContinue ? [cont] : [],
-    waiting: canContinue ? [cont, { label: "One more question", run: onMore }] : [...more, walk],
-    answering: (question?.answers ?? []).map((a, i) => ({ label: a.label, run: () => onAnswer?.(a.id), primary: i === 0 })),
+    waiting: canContinue ? [cont, action("One more question", onMore)] : [...more, walk],
+    answering: (question?.answers ?? []).map((a, i) => action(a.label, () => onAnswer?.(a.id), i === 0)),
     returning: [],
-    finished: [{ label: "Start over", run: onStart, primary: true }]
+    finished: [action("Start over", onStart, true)]
   };
+  const list = chips[mode];
+  const questions = list.filter((chip) => chip.kind === "question");
+  const actions = list.filter((chip) => chip.kind === "action");
+  if (!list.length) return null;
   return (
-    <div className="flex min-h-[4.5rem] flex-wrap content-start gap-2 md:max-h-44 md:min-h-0 md:shrink-0 md:overflow-y-auto">
-      {chips[mode].map((chip) => (
+    <div className="flex flex-wrap items-center gap-2 md:shrink-0">
+      {questions.length > 0 && <QuestionMenu key={mode} questions={questions} />}
+      {actions.map((chip) => (
         <button
           key={chip.label}
           type="button"
