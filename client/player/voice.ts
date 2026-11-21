@@ -395,12 +395,20 @@ export class Voice implements Speaker {
     });
   }
 
+  /** Test hook / UI: the browser voice that would be used. */
+  static browserVoiceName(): string | null {
+    if (typeof window === "undefined" || !window.speechSynthesis) return null;
+    return pickBrowserVoice(window.speechSynthesis.getVoices())?.name ?? null;
+  }
+
   private speakBrowser(line: number, text: string, words: { charStart: number }[], fireUpTo: (i: number) => void, finishAll: () => void): Promise<boolean | null> {
     const synth = window.speechSynthesis;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "en-US";
-    const english = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith("en"));
-    if (english) utterance.voice = english;
+    const voice = pickBrowserVoice(synth.getVoices());
+    if (voice) utterance.voice = voice;
+    // Calm advisor pace; the default rate sounds rushed.
+    utterance.rate = 0.9;
     // Some voices never send boundary events: an estimated clock drives the words until one arrives.
     const estimate = estimateTimings(text).map((t) => t.start);
 
@@ -458,4 +466,20 @@ export class Voice implements Speaker {
       synth.speak(utterance);
     });
   }
+}
+
+/**
+ * Prefer natural (neural) English voices over the old robotic system voices.
+ * Edge/Windows: "Microsoft Aria/Jenny Online (Natural)"; Chrome: "Google UK English Female"; macOS: "Samantha".
+ */
+export function pickBrowserVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
+  const english = voices.filter((v) => v.lang.toLowerCase().startsWith("en"));
+  const score = (v: SpeechSynthesisVoice) => {
+    const name = v.name.toLowerCase();
+    if (/natural|neural|online/.test(name)) return 4;
+    if (/google uk english female|google us english/.test(name)) return 3;
+    if (/samantha|serena|karen|moira|aria|jenny/.test(name)) return 2;
+    return v.lang.toLowerCase() === "en-gb" || v.lang.toLowerCase() === "en-us" ? 1 : 0;
+  };
+  return [...english].sort((a, b) => score(b) - score(a))[0];
 }

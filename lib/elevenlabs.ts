@@ -61,6 +61,25 @@ export function wordsFromAlignment(alignment: Alignment): SpokenWord[] {
   return words;
 }
 
+const envNumber = (name: string, fallback: number) => {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && process.env[name] !== "" && process.env[name] !== undefined ? value : fallback;
+};
+
+/**
+ * Calm, trustworthy advisor delivery: slightly slower than default, steady intonation, no dramatised style.
+ * Tunable per voice via ELEVENLABS_SPEED (0.7–1.2), ELEVENLABS_STABILITY (0–1), ELEVENLABS_SIMILARITY (0–1).
+ */
+export function voiceSettings() {
+  return {
+    speed: Math.min(1.2, Math.max(0.7, envNumber("ELEVENLABS_SPEED", 0.9))),
+    stability: envNumber("ELEVENLABS_STABILITY", 0.6),
+    similarity_boost: envNumber("ELEVENLABS_SIMILARITY", 0.75),
+    style: 0,
+    use_speaker_boost: true
+  };
+}
+
 export async function speakWithElevenLabs(
   text: string,
   voiceId: string,
@@ -71,7 +90,7 @@ export async function speakWithElevenLabs(
   const response = await fetcher(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps?output_format=mp3_44100_128`, {
     method: "POST",
     headers: { "xi-api-key": apiKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ text, model_id: modelId }),
+    body: JSON.stringify({ text, model_id: modelId, voice_settings: voiceSettings() }),
     signal: AbortSignal.timeout(45_000)
   });
   if (!response.ok) {

@@ -82,7 +82,7 @@ test("speech helper requests multilingual audio with timestamps", async () => {
     return Response.json(timestampsPayload("Hello world."));
   });
   assert.match(endpoint, /\/v1\/text-to-speech\/voice-1\/with-timestamps\?output_format=mp3_44100_128$/);
-  assert.deepEqual(JSON.parse(requestBody), { text: "Hello world.", model_id: "eleven_multilingual_v2" });
+  assert.deepEqual(JSON.parse(requestBody), { text: "Hello world.", model_id: "eleven_multilingual_v2", voice_settings: { speed: 0.9, stability: 0.6, similarity_boost: 0.75, style: 0, use_speaker_boost: true } });
   assert.equal(speech.mimeType, "audio/mpeg");
   assert.equal(speech.audioBase64, Buffer.from([1, 2, 3]).toString("base64"));
   assert.deepEqual(speech.words.map((w) => w.word), ["Hello", "world"]);
