@@ -36,9 +36,9 @@ test("selects a deterministic financial tool for each supported intent", () => {
   assert.equal(selectFinancialTool("Will I have enough money in 30 days?"), "get_cashflow_forecast");
   assert.equal(selectFinancialTool("Which recurring payments should I review?"), "get_recurring_payments");
   assert.equal(selectFinancialTool("Was war mein tiefster balance im September?"), "get_balance_series");
-  assert.equal(selectFinancialTool("Eylül ay sonu bakiyem neydi?"), "get_balance_series");
-  assert.equal(selectFinancialTool("Düzenli ödemelerim neler?"), "get_recurring_payments");
-  assert.equal(selectFinancialTool("Önümüzdeki ay yeterli param olur mu?"), "get_cashflow_forecast");
+  assert.equal(selectFinancialTool("What was my balance at the end of September?"), "get_balance_series");
+  assert.equal(selectFinancialTool("What are my regular payments?"), "get_recurring_payments");
+  assert.equal(selectFinancialTool("Will I have enough money next month?"), "get_cashflow_forecast");
   assert.equal(selectFinancialTool("Give me an account summary"), "get_financial_summary");
 });
 

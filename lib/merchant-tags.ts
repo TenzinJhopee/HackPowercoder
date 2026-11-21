@@ -26,21 +26,44 @@ export interface MerchantTag {
   necessity: Necessity;
   group: SpendingGroup;
   source: "rule" | "manual" | "fallback";
+  /** One line the agent can use to explain the tag. */
+  reason: string;
+  /** Set when the tag is uncertain: the agent asks this instead of asserting. */
+  askUser?: string;
 }
 
-type Rule = [Necessity, SpendingGroup];
+/** The only user-facing wording for necessity; the model must not invent its own. */
+export const necessityLabels: Record<Necessity, string> = {
+  compulsory: "fixed",
+  reducible: "adjustable",
+  discretionary: "flexible"
+};
+
+export const groupLabels: Record<SpendingGroup, string> = {
+  housing: "Housing", health: "Health", tax: "Tax", transport: "Transport", travel: "Travel",
+  electronics: "Electronics", bike: "Cycling", clothing: "Clothing", online: "Online shopping",
+  food: "Food & drink", books: "Books", subscriptions: "Subscriptions", leisure: "Leisure", other: "Other"
+};
+
+const defaultReasons: Record<Necessity, string> = {
+  compulsory: "An obligation; the amount can't be changed in the short term.",
+  reducible: "Needed, but the amount can come down.",
+  discretionary: "The user's free choice."
+};
+
+type Rule = [Necessity, SpendingGroup, { reason?: string; askUser?: string }?];
 
 const rules: Record<string, Rule> = {
   // compulsory
-  "Rent": ["compulsory", "housing"],
-  "BKW": ["compulsory", "housing"],
-  "Krankenkasse": ["compulsory", "health"],
-  "Hügi Optik": ["compulsory", "health"],
-  "Steuerverwaltung": ["compulsory", "tax"],
-  "Bundesamts für Zoll und Grenzsicherheit (BAZG)": ["compulsory", "tax"],
-  "Libero-Tarifverbund": ["compulsory", "transport"],
+  "Rent": ["compulsory", "housing", { reason: "Monthly rent." }],
+  "BKW": ["compulsory", "housing", { reason: "Electricity bill." }],
+  "Krankenkasse": ["compulsory", "health", { reason: "Mandatory health insurance premium." }],
+  "Hügi Optik": ["compulsory", "health", { reason: "Glasses; a health expense." }],
+  "Steuerverwaltung": ["compulsory", "tax", { reason: "Tax payment." }],
+  "Bundesamts für Zoll und Grenzsicherheit (BAZG)": ["compulsory", "tax", { reason: "Customs fee." }],
+  "Libero-Tarifverbund": ["compulsory", "transport", { reason: "Annual public transport pass.", askUser: "Do you use the Libero pass for commuting to work?" }],
   // reducible
-  "Kantine AG": ["reducible", "food"],
+  "Kantine AG": ["reducible", "food", { reason: "Lunch at work; needed, but the amount is flexible." }],
   "Coop Tankstelle Talgut Zentrum": ["reducible", "transport"],
   "SBB CFF FSS Ticket Shop": ["reducible", "transport"],
   "Schweizerische Bundesbahnen": ["reducible", "transport"],
@@ -108,10 +131,17 @@ const rules: Record<string, Rule> = {
 };
 
 export function ruleTags(): MerchantTag[] {
-  return Object.entries(rules).map(([merchant, [necessity, group]]) => ({ merchant, necessity, group, source: "rule" }));
+  return Object.entries(rules).map(([merchant, [necessity, group, extra]]) => ({
+    merchant,
+    necessity,
+    group,
+    source: "rule",
+    reason: extra?.reason ?? defaultReasons[necessity],
+    askUser: extra?.askUser
+  }));
 }
 
 /** Untagged merchant: treated as flexible "other" and reported as unreviewed, never silently guessed as compulsory. */
 export function fallbackTag(merchant: string): MerchantTag {
-  return { merchant, necessity: "discretionary", group: "other", source: "fallback" };
+  return { merchant, necessity: "discretionary", group: "other", source: "fallback", reason: "Not tagged yet.", askUser: `What was the spending at ${merchant} for?` };
 }

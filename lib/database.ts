@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { loadAccountCsv } from "@/lib/load-accounts";
 import { ruleTags, type MerchantTag, type Necessity, type SpendingGroup } from "@/lib/merchant-tags";
 import type { Transaction } from "@/lib/models";
+import type { UserNote } from "@/lib/facts";
 
 const dataDirectory = path.join(process.cwd(), "data");
 const databasePath = path.join(dataDirectory, "finance.sqlite");
@@ -40,9 +41,21 @@ function getDatabase() {
         merchant TEXT PRIMARY KEY,
         necessity TEXT NOT NULL CHECK (necessity IN ('compulsory', 'reducible', 'discretionary')),
         grp TEXT NOT NULL,
-        source TEXT NOT NULL CHECK (source IN ('rule', 'manual'))
+        source TEXT NOT NULL CHECK (source IN ('rule', 'manual')),
+        reason TEXT NOT NULL DEFAULT '',
+        ask_user TEXT
+      );
+      CREATE TABLE IF NOT EXISTS user_notes (
+        subject TEXT PRIMARY KEY,
+        answer TEXT NOT NULL,
+        text TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL
       );
     `);
+    // Databases created before reason/ask_user existed.
+    const columns = new Set((database.prepare("PRAGMA table_info(merchant_tags)").all() as Array<{ name: string }>).map((c) => c.name));
+    if (!columns.has("reason")) database.exec("ALTER TABLE merchant_tags ADD COLUMN reason TEXT NOT NULL DEFAULT ''");
+    if (!columns.has("ask_user")) database.exec("ALTER TABLE merchant_tags ADD COLUMN ask_user TEXT");
   }
   return database;
 }
@@ -57,27 +70,62 @@ function readSeedTransactions() {
   return transactions;
 }
 
-/** Deletes and rebuilds the database from the CSV files (`npm run db:seed`). */
-/** Inserts rule tags; existing rows (including manual corrections) are kept. */
+/** Inserts rule tags; manual corrections are kept, rule rows are refreshed. */
 function seedMerchantTags(db: DatabaseSync) {
-  const insert = db.prepare("INSERT OR IGNORE INTO merchant_tags (merchant, necessity, grp, source) VALUES (?, ?, ?, 'rule')");
-  for (const tag of ruleTags()) insert.run(tag.merchant, tag.necessity, tag.group);
+  const upsert = db.prepare(`
+    INSERT INTO merchant_tags (merchant, necessity, grp, source, reason, ask_user) VALUES (?, ?, ?, 'rule', ?, ?)
+    ON CONFLICT(merchant) DO UPDATE SET necessity = excluded.necessity, grp = excluded.grp, reason = excluded.reason, ask_user = excluded.ask_user
+    WHERE merchant_tags.source = 'rule'
+  `);
+  for (const tag of ruleTags()) upsert.run(tag.merchant, tag.necessity, tag.group, tag.reason, tag.askUser ?? null);
 }
 
 export async function getMerchantTags(): Promise<MerchantTag[]> {
   await initializeDatabase();
-  const rows = getDatabase().prepare("SELECT merchant, necessity, grp, source FROM merchant_tags").all() as Array<{ merchant: string; necessity: Necessity; grp: SpendingGroup; source: "rule" | "manual" }>;
-  return rows.map((row) => ({ merchant: row.merchant, necessity: row.necessity, group: row.grp, source: row.source }));
+  const rows = getDatabase().prepare("SELECT merchant, necessity, grp, source, reason, ask_user FROM merchant_tags").all() as Array<{
+    merchant: string; necessity: Necessity; grp: SpendingGroup; source: "rule" | "manual"; reason: string; ask_user: string | null;
+  }>;
+  return rows.map((row) => ({
+    merchant: row.merchant,
+    necessity: row.necessity,
+    group: row.grp,
+    source: row.source,
+    reason: row.reason,
+    askUser: row.ask_user ?? undefined
+  }));
 }
 
-/** User correction of a tag; wins over rules and survives reseeding. */
+/** User correction of a tag; wins over rules, survives reseeding, and the question is no longer asked. */
 export async function setMerchantTag(merchant: string, necessity: Necessity, group: SpendingGroup) {
   await initializeDatabase();
   getDatabase()
-    .prepare("INSERT INTO merchant_tags (merchant, necessity, grp, source) VALUES (?, ?, ?, 'manual') ON CONFLICT(merchant) DO UPDATE SET necessity = excluded.necessity, grp = excluded.grp, source = 'manual'")
+    .prepare(`
+      INSERT INTO merchant_tags (merchant, necessity, grp, source, reason, ask_user) VALUES (?, ?, ?, 'manual', 'Set by the user.', NULL)
+      ON CONFLICT(merchant) DO UPDATE SET necessity = excluded.necessity, grp = excluded.grp, source = 'manual', reason = 'Set by the user.', ask_user = NULL
+    `)
     .run(merchant, necessity, group);
 }
 
+export async function getUserNotes(): Promise<UserNote[]> {
+  await initializeDatabase();
+  const rows = getDatabase().prepare("SELECT subject, answer, text, created_at FROM user_notes ORDER BY created_at").all() as Array<{ subject: string; answer: string; text: string; created_at: string }>;
+  return rows.map((row) => ({ subject: row.subject, answer: row.answer, text: row.text, createdAt: row.created_at }));
+}
+
+/** Stores the user's answer to an open question; one answer per subject, the latest wins. */
+export async function saveUserNote(note: Omit<UserNote, "createdAt">) {
+  await initializeDatabase();
+  getDatabase()
+    .prepare("INSERT INTO user_notes (subject, answer, text, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(subject) DO UPDATE SET answer = excluded.answer, text = excluded.text, created_at = excluded.created_at")
+    .run(note.subject, note.answer, note.text, new Date().toISOString());
+}
+
+export async function deleteUserNote(subject: string) {
+  await initializeDatabase();
+  getDatabase().prepare("DELETE FROM user_notes WHERE subject = ?").run(subject);
+}
+
+/** Deletes and rebuilds transactions and rule tags from the CSV files (`npm run db:seed`); user notes and manual tags stay. */
 export async function reseedDatabase() {
   getDatabase().exec("DELETE FROM transactions; DELETE FROM merchant_tags WHERE source = 'rule';");
   initialized = undefined;

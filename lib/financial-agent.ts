@@ -39,18 +39,18 @@ export interface FinancialAgentContext {
   merchantTags?: MerchantTag[];
 }
 
-// Fallback keyword router (English + Turkish). The LLM tool-call path is primary.
+// Fallback keyword router (English + German). The LLM tool-call path is primary.
 export function selectFinancialTool(question: string): FinancialToolName {
-  const text = question.toLocaleLowerCase("tr-TR");
-  if (/balance|overdraft|overdrawn|lowest|bakiye|eksi\b|ay sonu|kontostand|saldo|hesapta ne kadar/.test(text)) return "get_balance_series";
-  if (/\bcreate\b|\bset up\b|\bmake\b|oluştur|hazırla/.test(text) && /budget|bütçe/.test(text)) return "create_budget";
-  if (/budget|bütçe/.test(text) && /status|over|remaining|left|limit|spent|durum|kaldı|aştı/.test(text)) return "get_budget_status";
-  if (/forecast|predict|projection|in \d+ days|next month|enough money|cash ?flow|önümüzdeki ay|gelecek ay|tahmin/.test(text)) return "get_cashflow_forecast";
-  if (/recurring|subscription|repeat payment|regular payment|abonelik|düzenli ödeme/.test(text)) return "get_recurring_payments";
-  if (/cheap|affordable|low[- ]cost|grocer|food|meal|recipe|brainstorm|ucuz|yemek/.test(text)) return "get_savings_opportunities";
-  if (/save|saving|reduce|cut back|optimis|optimize|tasarruf|biriktir|profil|sabit gider|esnek|zorunlu/.test(text)) return "get_spending_profile";
-  if (/category|categories|where does|where is|most of my|breakdown|kategori|nereye (?:gidiyor|gitti)/.test(text)) return "get_spending_by_category";
-  if (/this month|monthly spending|how much (?:did|do) i spend|expenses this month|spent|bu ay|harcadım|harcama/.test(text)) return "get_monthly_spending";
+  const text = question.toLowerCase();
+  if (/balance|overdraft|overdrawn|lowest|kontostand|saldo/.test(text)) return "get_balance_series";
+  if (/\bcreate\b|\bset up\b|\bmake\b/.test(text) && /budget/.test(text)) return "create_budget";
+  if (/budget/.test(text) && /status|over|remaining|left|limit|spent/.test(text)) return "get_budget_status";
+  if (/forecast|predict|projection|in \d+ days|next month|enough money|cash ?flow/.test(text)) return "get_cashflow_forecast";
+  if (/recurring|subscription|repeat payment|regular payment/.test(text)) return "get_recurring_payments";
+  if (/cheap|affordable|low[- ]cost|grocer|food|meal|recipe|brainstorm/.test(text)) return "get_savings_opportunities";
+  if (/save|saving|reduce|cut back|optimis|optimize|fixed cost|profile|flexible/.test(text)) return "get_spending_profile";
+  if (/category|categories|where does|where is|most of my|breakdown/.test(text)) return "get_spending_by_category";
+  if (/this month|monthly spending|how much (?:did|do) i spend|expenses this month|spent/.test(text)) return "get_monthly_spending";
   return "get_financial_summary";
 }
 

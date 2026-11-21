@@ -63,11 +63,11 @@ function timestampsPayload(text: string) {
 }
 
 test("wordsFromAlignment splits on spaces, strips edge punctuation and keeps char indices", () => {
-  const words = wordsFromAlignment(timestampsPayload("Merhaba, dünya!").alignment);
-  assert.deepEqual(words.map((w) => w.word), ["Merhaba", "dünya"]);
-  assert.deepEqual([words[0].charStart, words[0].charEnd, words[1].charStart, words[1].charEnd], [0, 8, 9, 15]);
+  const words = wordsFromAlignment(timestampsPayload("Hello, world!").alignment);
+  assert.deepEqual(words.map((w) => w.word), ["Hello", "world"]);
+  assert.deepEqual([words[0].charStart, words[0].charEnd, words[1].charStart, words[1].charEnd], [0, 6, 7, 13]);
   assert.equal(words[0].start, 0);
-  assert.ok(Math.abs(words[0].end - 0.8) < 1e-9);
+  assert.ok(Math.abs(words[0].end - 0.6) < 1e-9);
 });
 
 test("wordsFromAlignment skips pure punctuation and handles empty input", () => {

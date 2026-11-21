@@ -6,12 +6,12 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "Pfagent",
-  description: "Sesli kişisel finans danışmanı (hackathon prototipi)."
+  description: "Voice-based personal finance advisor (hackathon prototype)."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="tr" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.variable} suppressHydrationWarning>{children}</body>
     </html>
   );
