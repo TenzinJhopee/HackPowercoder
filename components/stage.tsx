@@ -54,7 +54,7 @@ function FigureCounter({ change }: { change: FigureChange | null }) {
       </p>
       <p key={`number-${seq}`} className={`fig-pop text-5xl font-semibold tabular-nums leading-tight sm:text-6xl lg:text-7xl ${tone}`} aria-live="off">
         <span className="relative inline-block">
-          {shown !== null && <span aria-hidden="true" className={`fig-marker absolute inset-x-0 bottom-[0.1em] h-[0.26em] rounded-sm ${negative ? "bg-coral/45" : "bg-sun"}`} />}
+          {shown !== null && <span aria-hidden="true" className={`fig-marker absolute inset-x-0 -bottom-[0.05em] h-[0.12em] rounded-full ${negative ? "bg-coral/45" : "bg-sun"}`} />}
           <span className="relative">{shown === null ? "\u2013" : swiss(shown)}</span>
         </span>
       </p>
