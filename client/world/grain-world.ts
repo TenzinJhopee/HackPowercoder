@@ -24,6 +24,9 @@ const ALIASES: Record<string, string[]> = {
 
 const LEFT_OVER = "Left over";
 
+/** How scattered resting banknotes lie per scene (radians): tidy in columns and jars, loose in pools and the galaxy. */
+const NOTE_SCATTER: Partial<Record<SceneType, number>> = { galaxy: 0.38, monthly: 0.05, level: 0.05, jars: 0.07, pools: 0.26 };
+
 /**
  * The real World (plan section 6): one set of grains, one per CHF 100, rearranged by scenes without cuts.
  * Scenes are declarative: each state change re-places every grain; grains already headed to their spot keep flying.
@@ -190,6 +193,7 @@ export class GrainWorld implements World {
   }
 
   private makeScene(type: SceneType, env: SceneEnv): Scene {
+    this.engine.setScatter(NOTE_SCATTER[sceneOf(type)] ?? 0.2);
     switch (type) {
       case "galaxy":
         return new GalaxyScene(env);
