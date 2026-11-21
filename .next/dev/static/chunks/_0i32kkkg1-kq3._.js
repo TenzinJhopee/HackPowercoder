@@ -935,7 +935,7 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                         setVoiceBusy(false);
                     };
                     window.speechSynthesis.speak(utterance);
-                    setError(`ElevenLabs unavailable: ${payloadMessage} Using your browser's voice instead.`);
+                    setError(`Gemini TTS unavailable: ${payloadMessage} Using your browser's voice instead.`);
                     if (!autoPlay) setVoiceBusy(false);
                     return;
                 }
@@ -1499,7 +1499,7 @@ function FinancialAgent({ transactions, currency, budgets, investments, bills, o
                                                             lineNumber: 416,
                                                             columnNumber: 23
                                                         }, this),
-                                                        " — uses ElevenLabs when available, with a browser voice fallback."
+                                                        " — uses Google Gemini TTS when available, with a browser voice fallback."
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/components/financial-agent.tsx",

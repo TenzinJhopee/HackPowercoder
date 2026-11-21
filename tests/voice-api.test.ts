@@ -4,10 +4,11 @@ import { POST as respond } from "../app/api/agent/respond/route";
 import { GET as status } from "../app/api/agent/status/route";
 import { POST as speak } from "../app/api/voice/speak/route";
 import { POST as transcribe } from "../app/api/voice/transcribe/route";
-import { speakWithElevenLabs, transcribeWithElevenLabs } from "../lib/elevenlabs";
+import { transcribeWithElevenLabs } from "../lib/elevenlabs";
+import { speakWithGemini } from "../lib/gemini-tts";
 import { explainFinancialToolResult } from "../lib/llm/provider";
 
-const voiceEnvKeys = ["ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "OLLAMA_BASE_URL", "OLLAMA_MODEL"] as const;
+const voiceEnvKeys = ["GEMINI_API_KEY", "GEMINI_TTS_MODEL", "GEMINI_TTS_VOICE", "ELEVENLABS_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_MODEL"] as const;
 type EnvKey = (typeof voiceEnvKeys)[number];
 
 async function withEnv(values: Partial<Record<EnvKey, string>>, action: () => Promise<void>) {
@@ -49,26 +50,40 @@ test("transcription helper sends audio to ElevenLabs with scribe_v3", async () =
   assert.equal(text, "How much did I spend?");
 });
 
-test("speech helper requests multilingual mp3 audio", async () => {
+test("Gemini TTS helper uses the configured model and voice", async () => {
   let endpoint = "";
   let requestBody = "";
-  const audio = await speakWithElevenLabs("Your verified result is ready.", "voice-1", "test-secret", async (input, init) => {
-    endpoint = String(input);
-    requestBody = String(init?.body);
-    assert.equal(new Headers(init?.headers).get("xi-api-key"), "test-secret");
-    return new Response(new Uint8Array([1, 2, 3]), { headers: { "Content-Type": "audio/mpeg" } });
+  const wav = new Uint8Array(44);
+  wav.set(new TextEncoder().encode("RIFF"), 0);
+  wav.set(new TextEncoder().encode("WAVE"), 8);
+  let audio = new ArrayBuffer(0);
+  await withEnv({ GEMINI_TTS_MODEL: "gemini-3.8-flash-lite-tts", GEMINI_TTS_VOICE: "Kore" }, async () => {
+    audio = await speakWithGemini("Your verified result is ready.", "test-secret", async (input, init) => {
+      endpoint = String(input);
+      requestBody = String(init?.body);
+      assert.equal(new Headers(init?.headers).get("x-goog-api-key"), "test-secret");
+      return Response.json({ output_audio: { data: Buffer.from(wav).toString("base64") } });
+    });
   });
-  assert.match(endpoint, /\/v1\/text-to-speech\/voice-1\?output_format=mp3_44100_128$/);
-  assert.deepEqual(JSON.parse(requestBody), { text: "Your verified result is ready.", model_id: "eleven_multilingual_v2" });
-  assert.equal(audio.byteLength, 3);
+  assert.equal(endpoint, "https://generativelanguage.googleapis.com/v1beta/interactions");
+  assert.deepEqual(JSON.parse(requestBody), {
+    model: "gemini-3.8-flash-lite-tts",
+    input: [{ type: "user_input", content: [{ type: "text", text: "Your verified result is ready." }] }],
+    response_format: { type: "audio" },
+    generation_config: { speech_config: [{ voice: "Kore" }] }
+  });
+  assert.equal(audio.byteLength, 44);
 });
 
-test("speech API uses the default voice when only an API key is configured", async () => {
-  await withEnv({ ELEVENLABS_API_KEY: "test-secret" }, async () => {
+test("speech API uses Gemini when its API key is configured", async () => {
+  await withEnv({ GEMINI_API_KEY: "test-secret" }, async () => {
     let endpoint = "";
+    const wav = new Uint8Array(44);
+    wav.set(new TextEncoder().encode("RIFF"), 0);
+    wav.set(new TextEncoder().encode("WAVE"), 8);
     const restoreFetch = mockFetch(async (input) => {
       endpoint = String(input);
-      return new Response(new Uint8Array([1, 2, 3]), { headers: { "Content-Type": "audio/mpeg" } });
+      return Response.json({ output_audio: { data: Buffer.from(wav).toString("base64") } });
     });
     try {
       const response = await speak(new Request("http://localhost/api/voice/speak", {
@@ -77,14 +92,15 @@ test("speech API uses the default voice when only an API key is configured", asy
         body: JSON.stringify({ text: "Hello" })
       }));
       assert.equal(response.status, 200);
-      assert.match(endpoint, /\/21m00Tcm4TlvDq8ikWAM\?/);
+      assert.equal(endpoint, "https://generativelanguage.googleapis.com/v1beta/interactions");
+      assert.equal(response.headers.get("content-type"), "audio/wav");
     } finally {
       restoreFetch();
     }
   });
 });
 
-test("voice API routes report missing ElevenLabs credentials without failing text use", async () => {
+test("voice API routes report missing provider credentials without failing text use", async () => {
   await withEnv({}, async () => {
     const transcription = await transcribe(new Request("http://localhost/api/voice/transcribe", { method: "POST" }));
     const speech = await speak(new Request("http://localhost/api/voice/speak", { method: "POST" }));
@@ -94,7 +110,7 @@ test("voice API routes report missing ElevenLabs credentials without failing tex
 });
 
 test("voice routes validate payloads and surface upstream failures", async () => {
-  await withEnv({ ELEVENLABS_API_KEY: "test-secret", ELEVENLABS_VOICE_ID: "voice-1" }, async () => {
+  await withEnv({ GEMINI_API_KEY: "test-secret", ELEVENLABS_API_KEY: "test-secret" }, async () => {
     const invalidSpeech = await speak(new Request("http://localhost/api/voice/speak", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -102,9 +118,9 @@ test("voice routes validate payloads and surface upstream failures", async () =>
     }));
     assert.equal(invalidSpeech.status, 400);
 
-    const restoreFetch = mockFetch(async () => Response.json({
-      detail: { message: "Free users cannot use library voices via the API. Please upgrade your subscription to use this voice." }
-    }, { status: 402 }));
+    const restoreFetch = mockFetch(async (input) => String(input).includes("generativelanguage.googleapis.com")
+      ? Response.json({ error: { message: "Service unavailable." } }, { status: 503 })
+      : Response.json({ detail: { message: "Transcription service unavailable." } }, { status: 503 }));
     try {
       const speechFailure = await speak(new Request("http://localhost/api/voice/speak", {
         method: "POST",
@@ -115,7 +131,7 @@ test("voice routes validate payloads and surface upstream failures", async () =>
       form.append("file", new Blob([new Uint8Array([1])], { type: "audio/webm" }), "voice.webm");
       const transcriptionFailure = await transcribe(new Request("http://localhost/api/voice/transcribe", { method: "POST", body: form }));
       assert.equal(speechFailure.status, 502);
-      assert.match((await speechFailure.json()).error, /upgrade your subscription/i);
+      assert.match((await speechFailure.json()).error, /Gemini speech generation failed/i);
       assert.equal(transcriptionFailure.status, 502);
     } finally {
       restoreFetch();
