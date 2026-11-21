@@ -2,7 +2,7 @@
 
 import { useRef, useState, type KeyboardEvent } from "react";
 import type { BeatQuestion, ConversationMode } from "@/lib/contracts";
-import { AFFORD_EXAMPLE } from "@/content/scripts";
+import { AFFORD_EXAMPLE, SAVE_EXAMPLE } from "@/content/scripts";
 import { Logo } from "./logo";
 
 const modeText: Record<ConversationMode, string> = {
@@ -82,7 +82,7 @@ export function Chips({ mode, question, onStart, onSay, onResume, onMore, onAnsw
   const chips: Record<ConversationMode, Chip[]> = {
     idle: [{ label: "Start the presentation", run: onStart, primary: true }],
     presenting: [ask("Wait, why is September so high?"), ask("Wait, how can I save money?"), ask("Wait, what am I looking at?")],
-    listening: [ask("Why is September so high?"), ask("Why was November high?"), ask("How can I save money?"), ask("What are my spending habits?"), ask(AFFORD_EXAMPLE), cont],
+    listening: [ask("Why is September so high?"), ask("Why was November high?"), ask(SAVE_EXAMPLE), ask("What are my spending habits?"), ask(AFFORD_EXAMPLE), cont],
     side: [cont],
     waiting: [cont, { label: "One more question", run: onMore }],
     answering: (question?.answers ?? []).map((a, i) => ({ label: a.label, run: () => onAnswer?.(a.id), primary: i === 0 })),

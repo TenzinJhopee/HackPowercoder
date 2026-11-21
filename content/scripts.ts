@@ -1,4 +1,5 @@
-import { parseAmount, parseMonth, replayPurchase, type BalancePoint } from "../lib/afford";
+import { measureAgainstSurplus, parseAmount, parseMonth, replayPurchase, type BalancePoint } from "../lib/afford";
+import { savingsPlan } from "../lib/savings-plan";
 import { DEFAULT_BRIDGE, DIRECTOR_FAILURE_LINE, FILLER_LINE, FILLER_LINES, type Breakdown, type Script } from "../lib/contracts";
 import type { FactsExport } from "../lib/facts-export";
 import rawFacts from "../public/facts.json";
@@ -129,11 +130,11 @@ export const MAIN: Script = [
 // ---------- Prepared side answers (June, July, September, November) ----------
 
 /** `script` may be built from the question (the affordability answer); every other answer is fixed. */
-export type SideAnswer = { id: string; match(question: string): boolean; script: Script | ((question: string) => Script) };
+export type SideAnswer = { id: string; match(question: string): boolean; script: Script | ((question: string) => Script); /** Scripts a built answer produces for its fixed example (for voice pre-generation and the number test). */ examples?: () => Script[] };
 
 const asks = (pattern: RegExp) => (question: string) => pattern.test(question.toLocaleLowerCase("en"));
 
-// ---------- "Can I afford this?" (built from the question; a replay of last year, not a forecast) ----------
+// ---------- "Can I afford this?" (built from the question; measured against what she kept last year, not a forecast) ----------
 
 /** The chip's fixed example; its lines are pre-generated and its numbers are in facts.json (afford_example). */
 export const AFFORD_EXAMPLE = "Can I afford a 3,000 franc laptop?";
@@ -142,48 +143,64 @@ const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "Ju
 const daily: BalancePoint[] = facts.private_balance_daily.map(([date, balance]) => ({ date, balance }));
 const francs = (value: number) => Math.round(Math.abs(value)).toLocaleString("en-US");
 
-/** Two or three beats on the month-by-month balance. Consequences only: never says whether to buy. */
-export function affordScript(amount: number, month: number): Script {
-  const r = replayPurchase(daily, amount, month, facts.card_payment_dates);
-  const bought = MONTH_NAMES[month - 1];
-  const lowMonth = Number(r.newLowest.date.slice(5, 7));
-  const lowest = francs(r.actualLowest.balance);
-  const lowestFigure = { label: "Lowest point with the purchase, compared with the start", value: Math.round(r.newLowest.balance) };
-  if (r.belowActualLowest > 0) {
-    const script: Script = [
+/**
+ * Two or three beats: the amount against what she kept last year ("in these accounts", since they may not hold all her
+ * spending), then, for a named month before December, how low last year's balance would have gone. Consequences only.
+ */
+export function affordScript(amount: number, month: number | null = null): Script {
+  const kept = facts.afford_example;
+  if (!kept) return [{ say: AFFORD_ASK_AMOUNT_LINE, scene: { type: "level" } }];
+  const m = measureAgainstSurplus(amount, kept);
+  const price = francs(amount);
+  const perMonth = francs(m.monthlySurplus);
+  const ordinaryMonths =
+    m.monthsOfSurplus === null ? null : m.monthsOfSurplus < 1 ? "less than one ordinary month" : m.monthsOfSurplus === 1 ? "about one ordinary month" : `about ${m.monthsOfSurplus} ordinary months`;
+  const thirteenth = { word: "thirteenth", target: "13" };
+  let script: Script;
+  if (m.tier === 1) {
+    script = [
+      { say: `In these accounts you kept about ${perMonth} francs a month last year, without the thirteenth salary.`, scene: { type: "level" } },
+      { say: `So ${price} francs is ${ordinaryMonths} of that, and it fits without December's extra salary.`, scene: { type: "level" } }
+    ];
+  } else if (m.tier === 2) {
+    script = [
+      ordinaryMonths === null
+        ? { say: "In these accounts, ordinary months left nothing over last year; only the thirteenth salary did.", scene: { type: "level" }, cues: [thirteenth] }
+        : { say: `In these accounts, ${price} francs is ${ordinaryMonths} of what you kept, ${perMonth} a month.`, scene: { type: "level" } },
       {
-        say: `Replaying last year, bought in ${bought}, that takes you to ${francs(r.newLowest.balance)} francs below the year's start by ${MONTH_NAMES[lowMonth - 1]}.`,
-        scene: { type: "level", focus: month },
-        cues: [{ word: bought, target: month }, { word: francs(r.newLowest.balance), target: lowMonth, figure: lowestFigure }]
-      },
-      {
-        say: `That is ${francs(r.belowActualLowest)} francs deeper than last year's lowest point, ${lowest} below the start.`,
-        scene: { type: "level", focus: lowMonth },
-        cues: [{ word: "deeper", target: lowMonth }]
+        say: `With December's thirteenth salary it is covered, and ${francs(m.leftOfYearNet)} francs of the year's surplus remain.`,
+        scene: { type: "level", focus: 12 },
+        cues: [thirteenth]
       }
     ];
-    if (r.earliestOkMonth !== null && r.earliestOkMonth > month) {
-      const ok = MONTH_NAMES[r.earliestOkMonth - 1];
-      script.push({
-        say: `From ${ok} on, the same purchase stays above last year's lowest point.`,
-        scene: { type: "level", focus: r.earliestOkMonth },
-        cues: [{ word: ok, target: r.earliestOkMonth === 12 ? "13" : r.earliestOkMonth }]
-      });
-    }
+  } else {
+    script = [
+      { say: `In these accounts, the whole of last year left you ${francs(kept.yearNet)} francs, thirteenth salary included.`, scene: { type: "level" } },
+      { say: `So ${price} francs is ${francs(m.aboveYearNet)} francs more than everything you kept last year.`, scene: { type: "level" } }
+    ];
+  }
+  if (month === null) {
+    if (m.tier === 2) script.push({ say: "Bought before December, it would lower your balance until the thirteenth salary arrives.", scene: { type: "level", focus: 12 } });
     return script;
   }
-  return [
-    {
-      say: `Replaying last year, bought in ${bought}, the balance stays above its lowest point, ${lowest} below the start.`,
-      scene: { type: "level", focus: month },
-      cues: [{ word: bought, target: month }]
-    },
-    { say: "That is last year's pattern replayed, not a forecast for this year.", scene: { type: "level", focus: month } }
-  ];
+  if (month < 12) {
+    const r = replayPurchase(daily, amount, month, facts.card_payment_dates);
+    const lowMonth = Number(r.newLowest.date.slice(5, 7));
+    const bought = MONTH_NAMES[month - 1];
+    if (r.newLowest.balance < 0) {
+      script.push({
+        say: `Paid in ${bought}, it would have taken last year's balance to ${francs(r.newLowest.balance)} francs below its start by ${MONTH_NAMES[lowMonth - 1]}.`,
+        scene: { type: "level", focus: lowMonth },
+        cues: [{ word: bought, target: month }, { word: francs(r.newLowest.balance), target: lowMonth, figure: { label: "Lowest point with the purchase, compared with the start", value: Math.round(r.newLowest.balance) } }]
+      });
+    }
+  }
+  return script;
 }
 
 const affordAnswer: SideAnswer = {
   id: "afford",
+  examples: () => affordExampleScripts(),
   match: (question) =>
     /\b(afford|can i (buy|spend))\b/i.test(question) || /^\s*(about\s+)?[\d.,'’]+\s*(k|thousand)?\s*(francs?|chf)?\s*[.?!]?\s*$/i.test(question),
   script: (question) => {
@@ -193,14 +210,76 @@ const affordAnswer: SideAnswer = {
   }
 };
 
-/** Every afford script the fixed example can produce (its month defaults to the next calendar month). */
-export const affordExampleScripts = (): Script[] => MONTH_NAMES.map((_, i) => affordScript(parseAmount(AFFORD_EXAMPLE)!, i + 1));
+/** The afford script the fixed example produces (it names no month, so there is one). */
+export const affordExampleScripts = (): Script[] => [affordScript(parseAmount(AFFORD_EXAMPLE)!)];
 
-/** The scripts a side answer can play: the fixed one, or every variant of the fixed example. */
-export const sideScripts = (answer: SideAnswer): Script[] => (typeof answer.script === "function" ? affordExampleScripts() : [answer.script]);
+/** The scripts a side answer can play: the fixed one, or the fixed example's. */
+export const sideScripts = (answer: SideAnswer): Script[] => (typeof answer.script === "function" ? (answer.examples?.() ?? []) : [answer.script]);
+
+// ---------- "How can I save X a month?" (concrete cuts sized to the target; built from the question) ----------
+
+/** The chip's fixed example; its lines are pre-generated and its numbers are in facts.json (savings.example). */
+export const SAVE_EXAMPLE = "How can I save 100 francs a month?";
+const SAVE_QUESTION =
+  /\b(save|saving|spend\s+less|cut|reduce|lower|put\s+aside|set\s+aside)\b/i;
+/** What one purchase is called, singular and plural; other merchants are named as they are. */
+const PURCHASE_NAMES: Record<string, [string, string]> = {
+  "Kantine AG": ["canteen lunch", "canteen lunches"],
+  "Orell Fuessli": ["Orell Fuessli purchase", "Orell Fuessli purchases"]
+};
+const oneOffs = facts.insights.find((i) => i.id === "one_off_pot")?.figures as { oneOffTotal?: number; purchases?: number } | undefined;
+
+/** A target that is really an amount of money: "3a" and tiny numbers are not. */
+function saveTarget(question: string): number | null {
+  const amount = parseAmount(question.replace(/\b3a\b/gi, ""));
+  return amount !== null && amount >= 20 ? amount : null;
+}
+
+/** One beat per cut, then the total; when her habits cannot reach the target, that is said plainly. */
+export function saveScript(target: number): Script {
+  const plan = savingsPlan(target, facts.savings.habits, facts.savings.months, facts.savings.excluded);
+  const script: Script = plan.cuts.map((cut) => {
+    const [one, many] = PURCHASE_NAMES[cut.merchant] ?? [`${cut.merchant} purchase`, `${cut.merchant} purchases`];
+    const cueWord = (cut.fewer === 1 ? one : many).split(" ")[0];
+    return {
+      say: `${cut.fewer} fewer ${cut.fewer === 1 ? one : many} a month, of your usual ${cut.usualPerMonth}, saves about ${francs(cut.saves)} francs.`,
+      scene: { type: "pools", focus: cut.group },
+      cues: [{ word: cueWord, target: cut.group, figure: { label: `Saved a month: ${one}`, value: cut.saves } }]
+    };
+  });
+  if (plan.cuts.length && plan.shortfall === 0) {
+    script.push({
+      say: `Together that is about ${francs(plan.monthly)} francs a month, or ${francs(plan.yearly)} over a year.`,
+      scene: { type: "pools" },
+      cues: [{ word: "month", figure: { label: "Saved a month", value: plan.monthly } }]
+    });
+    return script;
+  }
+  script.push({
+    say: `Your regular habits give about ${francs(plan.reachable)} francs a month at most, not ${francs(target)}.`,
+    scene: { type: "pools" },
+    cues: [{ word: "habits", figure: { label: "From regular habits, a month", value: plan.reachable } }]
+  });
+  if (oneOffs?.oneOffTotal && oneOffs.purchases) {
+    script.push({
+      say: `The rest would come from big purchases: ${oneOffs.purchases} of them cost ${francs(oneOffs.oneOffTotal)} francs last year.`,
+      scene: { type: "monthly" },
+      cues: [{ word: "purchases", figure: { label: "Big one-off purchases in 2025", value: Math.round(oneOffs.oneOffTotal) } }]
+    });
+  }
+  return script;
+}
+
+const saveTargetAnswer: SideAnswer = {
+  id: "save-target",
+  match: (question) => SAVE_QUESTION.test(question) && saveTarget(question) !== null,
+  script: (question) => saveScript(saveTarget(question)!),
+  examples: () => [saveScript(saveTarget(SAVE_EXAMPLE)!)]
+};
 
 export const SIDE_ANSWERS: SideAnswer[] = [
   affordAnswer,
+  saveTargetAnswer,
   {
     id: "june",
     match: asks(/\bjun(e)?\b/),
