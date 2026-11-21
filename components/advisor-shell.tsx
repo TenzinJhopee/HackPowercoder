@@ -55,7 +55,7 @@ export function AdvisorShell() {
               <Welcome onSay={advisor.say} onStart={advisor.start} />
             ) : (
               <>
-                <Transcript log={advisor.log} line={advisor.line} lineKind={advisor.lineKind} />
+                <Transcript log={advisor.log} line={advisor.line} lineKind={advisor.lineKind} thinking={advisor.mode === "side" && advisor.lineKind === "filler"} />
                 {advisor.offer && <OfferCard confirmed={advisor.offerConfirmed} onConfirm={advisor.confirmOffer} />}
                 <Chips
                   mode={advisor.mode}

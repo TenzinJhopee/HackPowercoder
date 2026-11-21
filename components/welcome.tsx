@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { AFFORD_EXAMPLE } from "@/content/scripts";
+import { AppleHit } from "./apple-hit";
 
 /** What she can ask the advisor; each is answered from her own bookings. Shared with the follow-up chips. */
 export const STARTER_QUESTIONS = [
@@ -61,9 +62,12 @@ const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:o
 export function Welcome({ onSay, onStart }: { onSay: (text: string) => void; onStart: () => void }) {
   return (
     <section aria-label="Welcome" className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-bold leading-tight tracking-tight text-ink md:text-[1.7rem]">What would you like to know?</h1>
-        <p className="mt-1.5 text-sm leading-6 text-soft">Ask by voice or text. I answer from your own bookings, and every number comes from your data.</p>
+      <div className="flex items-start gap-3">
+        <AppleHit size={60} className="-ml-1 shrink-0" />
+        <div>
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-ink md:text-[1.7rem]">What would you like to know?</h1>
+          <p className="mt-1.5 text-sm leading-6 text-soft">Ask by voice or text. I answer from your own bookings, and every number comes from your data.</p>
+        </div>
       </div>
 
       <ul className="grid gap-2.5 sm:grid-cols-2">
