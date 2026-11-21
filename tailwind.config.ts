@@ -9,7 +9,15 @@ const config: Config = {
         muted: "#728096",
         brand: "#d92e3a",
         canvas: "#f6f7f9",
-        line: "#e9edf1"
+        line: "#e9edf1",
+        night: "#0b0d12",
+        panel: "#141821",
+        edge: "#262c3a",
+        paper: "#e8eaf0",
+        faint: "#5b6272",
+        spend: "#e8a33d",
+        coral: "#e5655b",
+        saved: "#5fbf8a"
       },
       boxShadow: {
         card: "0 8px 26px rgba(20, 34, 56, 0.045)"

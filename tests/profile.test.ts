@@ -18,8 +18,8 @@ test("loader: card payment nets to zero across accounts, Netflix is an expense",
 test("profile matches the verified facts for Jeanine 2025", () => {
   const profile = getSpendingProfile(transactions, "CHF");
   const group = (name: string) => profile.groups.find((g) => g.group === name)?.net;
-  assert.equal(group("housing"), 22462);
-  assert.equal(group("health"), 12335);
+  assert.equal(group("Housing"), 22462);
+  assert.equal(group("Health"), 12335);
   assert.equal(profile.merchants.find((m) => m.merchant === "Abercrombie & Fitch")?.net, 906.14);
   assert.equal(profile.income.baseMonthly, 7464);
   assert.equal(profile.income.aboveBase, 7464);

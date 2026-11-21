@@ -1,0 +1,1477 @@
+{
+  "year": 2025,
+  "currency": "CHF",
+  "salary_monthly": 7464,
+  "payday": 23,
+  "yearly_income_incl_13th_salary": 97032,
+  "year_end_net_vs_start": 8816,
+  "without_13th_salary": 1352,
+  "total_spending": 88379,
+  "categories_yearly_net_of_refunds": {
+    "Housing": 22462,
+    "Electronics": 13160,
+    "Travel": 12938,
+    "Health": 12335,
+    "Bike": 11523,
+    "Online shopping": 5691,
+    "Clothing": 4597,
+    "Transport": 2619,
+    "Food and drink": 2180,
+    "Tax": 630,
+    "Other": 243
+  },
+  "travel_breakdown": {
+    "USA_approx": 8000,
+    "London_July": 1631,
+    "Copenhagen_May": 1409,
+    "London_Cologne_April": 1395,
+    "Other": 503
+  },
+  "month_end_balance_vs_start_jan_dec": [
+    1971,
+    1883,
+    4034,
+    4442,
+    5140,
+    2563,
+    -2407,
+    480,
+    -5640,
+    -2720,
+    -2594,
+    8816
+  ],
+  "monthly_spending_jan_dec": [
+    5994,
+    7063,
+    6028,
+    6626,
+    6435,
+    10365,
+    12363,
+    4565,
+    14363,
+    3845,
+    7390,
+    3342
+  ],
+  "card_bill_jan_dec": [
+    1355,
+    2570,
+    559,
+    3187,
+    2134,
+    6125,
+    9036,
+    1313,
+    10019,
+    1349,
+    3916,
+    288
+  ],
+  "monthly_breakdown_by_category": {
+    "1": {
+      "Housing": 2012,
+      "Food and drink": 602,
+      "Online shopping": 920,
+      "Electronics": 1278,
+      "Transport": 37,
+      "Health": 982,
+      "Clothing": 164
+    },
+    "2": {
+      "Housing": 1820,
+      "Electronics": 985,
+      "Food and drink": 123,
+      "Clothing": 195,
+      "Online shopping": 348,
+      "Transport": 1774,
+      "Health": 1533,
+      "Travel": 286
+    },
+    "3": {
+      "Housing": 2040,
+      "Food and drink": 140,
+      "Online shopping": 219,
+      "Transport": 136,
+      "Electronics": 1311,
+      "Clothing": 990,
+      "Health": 982,
+      "Tax": 210
+    },
+    "4": {
+      "Housing": 1820,
+      "Food and drink": 195,
+      "Electronics": 1479,
+      "Transport": 64,
+      "Online shopping": 770,
+      "Clothing": -78,
+      "Health": 982,
+      "Travel": 1395
+    },
+    "5": {
+      "Housing": 1820,
+      "Travel": 1409,
+      "Food and drink": 127,
+      "Online shopping": 302,
+      "Electronics": 642,
+      "Transport": 52,
+      "Health": 982,
+      "Clothing": 1042,
+      "Bike": 59
+    },
+    "6": {
+      "Housing": 1820,
+      "Food and drink": 135,
+      "Transport": 61,
+      "Electronics": 784,
+      "Online shopping": 276,
+      "Health": 982,
+      "Clothing": 306,
+      "Bike": 6000
+    },
+    "7": {
+      "Housing": 1820,
+      "Food and drink": 143,
+      "Online shopping": 584,
+      "Other": 232,
+      "Electronics": 353,
+      "Transport": 38,
+      "Health": 982,
+      "Clothing": 1136,
+      "Travel": 1746,
+      "Bike": 5329
+    },
+    "8": {
+      "Housing": 1820,
+      "Food and drink": 145,
+      "Online shopping": 479,
+      "Electronics": 46,
+      "Transport": 81,
+      "Health": 982,
+      "Bike": 135,
+      "Clothing": 332,
+      "Travel": 545
+    },
+    "9": {
+      "Housing": 2030,
+      "Food and drink": 130,
+      "Online shopping": 447,
+      "Transport": 73,
+      "Electronics": 2321,
+      "Health": 982,
+      "Tax": 210,
+      "Travel": 7454,
+      "Clothing": 717
+    },
+    "10": {
+      "Housing": 1820,
+      "Food and drink": 137,
+      "Electronics": 627,
+      "Transport": 106,
+      "Online shopping": 434,
+      "Health": 982,
+      "Clothing": -363,
+      "Travel": 102
+    },
+    "11": {
+      "Housing": 1820,
+      "Food and drink": 139,
+      "Electronics": 3291,
+      "Online shopping": 546,
+      "Health": 982,
+      "Transport": 97,
+      "Tax": 210,
+      "Clothing": 306
+    },
+    "12": {
+      "Housing": 1820,
+      "Food and drink": 166,
+      "Transport": 102,
+      "Electronics": 45,
+      "Online shopping": 365,
+      "Health": 982,
+      "Other": 11,
+      "Clothing": -149
+    }
+  },
+  "monthly_breakdown_parts": {
+    "1": [
+      {
+        "name": "Housing",
+        "value": 2012
+      },
+      {
+        "name": "Electronics",
+        "value": 1278
+      },
+      {
+        "name": "Health",
+        "value": 982
+      },
+      {
+        "name": "Online shopping",
+        "value": 920
+      },
+      {
+        "name": "Other",
+        "value": 802
+      }
+    ],
+    "2": [
+      {
+        "name": "Housing",
+        "value": 1820
+      },
+      {
+        "name": "Transport",
+        "value": 1774
+      },
+      {
+        "name": "Health",
+        "value": 1533
+      },
+      {
+        "name": "Electronics",
+        "value": 985
+      },
+      {
+        "name": "Other",
+        "value": 951
+      }
+    ],
+    "3": [
+      {
+        "name": "Housing",
+        "value": 2040
+      },
+      {
+        "name": "Electronics",
+        "value": 1311
+      },
+      {
+        "name": "Clothing",
+        "value": 990
+      },
+      {
+        "name": "Health",
+        "value": 982
+      },
+      {
+        "name": "Other",
+        "value": 705
+      }
+    ],
+    "4": [
+      {
+        "name": "Housing",
+        "value": 1820
+      },
+      {
+        "name": "Electronics",
+        "value": 1479
+      },
+      {
+        "name": "Travel",
+        "value": 1395
+      },
+      {
+        "name": "Health",
+        "value": 982
+      },
+      {
+        "name": "Other",
+        "value": 950
+      }
+    ],
+    "5": [
+      {
+        "name": "Housing",
+        "value": 1820
+      },
+      {
+        "name": "Travel",
+        "value": 1409
+      },
+      {
+        "name": "Clothing",
+        "value": 1042
+      },
+      {
+        "name": "Health",
+        "value": 982
+      },
+      {
+        "name": "Other",
+        "value": 1182
+      }
+    ],
+    "6": [
+      {
+        "name": "Bike",
+        "value": 6000,
+        "aliases": [
+          "bicycle",
+          "veloshop"
+        ]
+      },
+      {
+        "name": "Rent",
+        "value": 1820,
+        "aliases": [
+          "housing"
+        ]
+      },
+      {
+        "name": "Health insurance",
+        "value": 982,
+        "aliases": [
+          "insurance",
+          "health"
+        ]
+      },
+      {
+        "name": "Digitec",
+        "value": 742,
+        "aliases": [
+          "galaxus",
+          "electronics"
+        ]
+      },
+      {
+        "name": "Other",
+        "value": 821
+      }
+    ],
+    "7": [
+      {
+        "name": "Bike",
+        "value": 5329,
+        "aliases": [
+          "bicycle",
+          "veloshop"
+        ]
+      },
+      {
+        "name": "Rent",
+        "value": 1820,
+        "aliases": [
+          "housing"
+        ]
+      },
+      {
+        "name": "London trip",
+        "value": 1746,
+        "aliases": [
+          "london",
+          "travel",
+          "hotel"
+        ]
+      },
+      {
+        "name": "Clothing",
+        "value": 1136,
+        "aliases": [
+          "clothes",
+          "fashion"
+        ]
+      },
+      {
+        "name": "Health insurance",
+        "value": 982,
+        "aliases": [
+          "insurance",
+          "health"
+        ]
+      },
+      {
+        "name": "Other",
+        "value": 1350
+      }
+    ],
+    "8": [
+      {
+        "name": "Housing",
+        "value": 1820
+      },
+      {
+        "name": "Health",
+        "value": 982
+      },
+      {
+        "name": "Travel",
+        "value": 545
+      },
+      {
+        "name": "Online shopping",
+        "value": 479
+      },
+      {
+        "name": "Other",
+        "value": 739
+      }
+    ],
+    "9": [
+      {
+        "name": "Plane tickets",
+        "value": 7458,
+        "aliases": [
+          "flights",
+          "flight",
+          "tickets",
+          "swiss",
+          "plane"
+        ]
+      },
+      {
+        "name": "Apple",
+        "value": 2273,
+        "aliases": [
+          "iphone",
+          "laptop"
+        ]
+      },
+      {
+        "name": "Rent and electricity",
+        "value": 2030,
+        "aliases": [
+          "rent",
+          "electricity",
+          "housing"
+        ]
+      },
+      {
+        "name": "Health insurance",
+        "value": 982,
+        "aliases": [
+          "insurance",
+          "health"
+        ]
+      },
+      {
+        "name": "Other",
+        "value": 1620
+      }
+    ],
+    "10": [
+      {
+        "name": "Housing",
+        "value": 1820
+      },
+      {
+        "name": "Health",
+        "value": 982
+      },
+      {
+        "name": "Electronics",
+        "value": 627
+      },
+      {
+        "name": "Other",
+        "value": 416
+      }
+    ],
+    "11": [
+      {
+        "name": "Apple",
+        "value": 3189,
+        "aliases": [
+          "iphone",
+          "laptop"
+        ]
+      },
+      {
+        "name": "Rent",
+        "value": 1820,
+        "aliases": [
+          "housing"
+        ]
+      },
+      {
+        "name": "Health insurance",
+        "value": 982,
+        "aliases": [
+          "insurance",
+          "health"
+        ]
+      },
+      {
+        "name": "Other",
+        "value": 1399
+      }
+    ],
+    "12": [
+      {
+        "name": "Housing",
+        "value": 1820
+      },
+      {
+        "name": "Health",
+        "value": 982
+      },
+      {
+        "name": "Online shopping",
+        "value": 365
+      },
+      {
+        "name": "Food and drink",
+        "value": 166
+      },
+      {
+        "name": "Other",
+        "value": 9
+      }
+    ]
+  },
+  "notable_items": {
+    "6": [
+      "23 June bike shop 6000"
+    ],
+    "7": [
+      "London hotel 1566",
+      "23 July bike shop 5329"
+    ],
+    "9": [
+      "Apple 2273",
+      "18 September plane tickets 7458"
+    ],
+    "11": [
+      "Apple 3189"
+    ]
+  },
+  "gaps": [
+    {
+      "id": "missing_payment:Krankenkasse:2025-02",
+      "mode": "ask",
+      "label": "Krankenkasse payment missing in 2025-02",
+      "merchant": "Krankenkasse",
+      "month": 2,
+      "usual_amount": 982,
+      "months_paid": 11
+    },
+    {
+      "id": "no_pillar_3a",
+      "mode": "ask",
+      "label": "No pillar 3a payment",
+      "yearly_amount": 0,
+      "limit": 7258
+    },
+    {
+      "id": "no_savings",
+      "mode": "ask",
+      "label": "No savings transfer",
+      "yearly_amount": 0
+    },
+    {
+      "id": "tax_provision",
+      "mode": "ask",
+      "label": "Tax paid so far",
+      "paid": 630,
+      "payments": 3
+    }
+  ],
+  "refunds": {
+    "total": 4590,
+    "merchants": [
+      {
+        "merchant": "Abercrombie & Fitch",
+        "bought": 3397,
+        "refunded": 2491,
+        "net": 906
+      }
+    ]
+  },
+  "card_budget_monthly": 3600,
+  "card_cycles": [
+    {
+      "cycle": 1,
+      "start": "2025-01-01",
+      "payment_date": "2025-01-23",
+      "statement": 1355,
+      "spent": 1402,
+      "budget_left": 2198,
+      "crossed_on": null,
+      "cumulative": [
+        [
+          "2025-01-01",
+          200
+        ],
+        [
+          "2025-01-04",
+          464
+        ],
+        [
+          "2025-01-05",
+          559
+        ],
+        [
+          "2025-01-07",
+          654
+        ],
+        [
+          "2025-01-08",
+          670
+        ],
+        [
+          "2025-01-10",
+          993
+        ],
+        [
+          "2025-01-11",
+          993
+        ],
+        [
+          "2025-01-13",
+          1217
+        ],
+        [
+          "2025-01-14",
+          1268
+        ],
+        [
+          "2025-01-20",
+          1318
+        ],
+        [
+          "2025-01-22",
+          1402
+        ]
+      ]
+    },
+    {
+      "cycle": 2,
+      "start": "2025-01-24",
+      "payment_date": "2025-02-23",
+      "statement": 2570,
+      "spent": 2337,
+      "budget_left": 1263,
+      "crossed_on": null,
+      "cumulative": [
+        [
+          "2025-01-24",
+          69
+        ],
+        [
+          "2025-01-26",
+          117
+        ],
+        [
+          "2025-01-28",
+          360
+        ],
+        [
+          "2025-01-30",
+          455
+        ],
+        [
+          "2025-02-03",
+          463
+        ],
+        [
+          "2025-02-08",
+          481
+        ],
+        [
+          "2025-02-12",
+          2031
+        ],
+        [
+          "2025-02-16",
+          2317
+        ],
+        [
+          "2025-02-20",
+          2320
+        ],
+        [
+          "2025-02-22",
+          2337
+        ]
+      ]
+    },
+    {
+      "cycle": 3,
+      "start": "2025-02-24",
+      "payment_date": "2025-03-23",
+      "statement": 559,
+      "spent": 658,
+      "budget_left": 2942,
+      "crossed_on": null,
+      "cumulative": [
+        [
+          "2025-02-24",
+          123
+        ],
+        [
+          "2025-02-28",
+          198
+        ],
+        [
+          "2025-03-02",
+          307
+        ],
+        [
+          "2025-03-03",
+          359
+        ],
+        [
+          "2025-03-05",
+          360
+        ],
+        [
+          "2025-03-06",
+          469
+        ],
+        [
+          "2025-03-07",
+          472
+        ],
+        [
+          "2025-03-08",
+          473
+        ],
+        [
+          "2025-03-12",
+          486
+        ],
+        [
+          "2025-03-13",
+          495
+        ],
+        [
+          "2025-03-14",
+          510
+        ],
+        [
+          "2025-03-18",
+          655
+        ],
+        [
+          "2025-03-20",
+          658
+        ]
+      ]
+    },
+    {
+      "cycle": 4,
+      "start": "2025-03-24",
+      "payment_date": "2025-04-23",
+      "statement": 3187,
+      "spent": 3187,
+      "budget_left": 413,
+      "crossed_on": null,
+      "cumulative": [
+        [
+          "2025-03-24",
+          109
+        ],
+        [
+          "2025-03-26",
+          347
+        ],
+        [
+          "2025-03-28",
+          625
+        ],
+        [
+          "2025-03-30",
+          765
+        ],
+        [
+          "2025-03-31",
+          814
+        ],
+        [
+          "2025-04-02",
+          889
+        ],
+        [
+          "2025-04-03",
+          1826
+        ],
+        [
+          "2025-04-05",
+          1827
+        ],
+        [
+          "2025-04-08",
+          1868
+        ],
+        [
+          "2025-04-10",
+          1961
+        ],
+        [
+          "2025-04-11",
+          1977
+        ],
+        [
+          "2025-04-13",
+          1599
+        ],
+        [
+          "2025-04-15",
+          1460
+        ],
+        [
+          "2025-04-18",
+          1503
+        ],
+        [
+          "2025-04-19",
+          2633
+        ],
+        [
+          "2025-04-20",
+          2899
+        ],
+        [
+          "2025-04-21",
+          3052
+        ],
+        [
+          "2025-04-22",
+          3187
+        ]
+      ]
+    },
+    {
+      "cycle": 5,
+      "start": "2025-04-24",
+      "payment_date": "2025-05-23",
+      "statement": 2134,
+      "spent": 2187,
+      "budget_left": 1413,
+      "crossed_on": null,
+      "cumulative": [
+        [
+          "2025-04-25",
+          70
+        ],
+        [
+          "2025-04-26",
+          320
+        ],
+        [
+          "2025-04-28",
+          384
+        ],
+        [
+          "2025-05-02",
+          1041
+        ],
+        [
+          "2025-05-04",
+          1147
+        ],
+        [
+          "2025-05-05",
+          1328
+        ],
+        [
+          "2025-05-06",
+          1917
+        ],
+        [
+          "2025-05-08",
+          1918
+        ],
+        [
+          "2025-05-10",
+          2023
+        ],
+        [
+          "2025-05-11",
+          1918
+        ],
+        [
+          "2025-05-12",
+          1977
+        ],
+        [
+          "2025-05-13",
+          2002
+        ],
+        [
+          "2025-05-14",
+          2039
+        ],
+        [
+          "2025-05-16",
+          2080
+        ],
+        [
+          "2025-05-17",
+          2120
+        ],
+        [
+          "2025-05-19",
+          2186
+        ],
+        [
+          "2025-05-20",
+          2187
+        ]
+      ]
+    },
+    {
+      "cycle": 6,
+      "start": "2025-05-24",
+      "payment_date": "2025-06-23",
+      "statement": 6125,
+      "spent": 6179,
+      "budget_left": -2579,
+      "crossed_on": "2025-06-23",
+      "cumulative": [
+        [
+          "2025-06-01",
+          136
+        ],
+        [
+          "2025-06-17",
+          179
+        ],
+        [
+          "2025-06-23",
+          6179
+        ]
+      ]
+    },
+    {
+      "cycle": 7,
+      "start": "2025-06-24",
+      "payment_date": "2025-07-23",
+      "statement": 9036,
+      "spent": 9060,
+      "budget_left": -5460,
+      "crossed_on": "2025-07-23",
+      "cumulative": [
+        [
+          "2025-06-24",
+          175
+        ],
+        [
+          "2025-06-26",
+          177
+        ],
+        [
+          "2025-06-27",
+          191
+        ],
+        [
+          "2025-06-28",
+          270
+        ],
+        [
+          "2025-07-01",
+          346
+        ],
+        [
+          "2025-07-03",
+          416
+        ],
+        [
+          "2025-07-04",
+          472
+        ],
+        [
+          "2025-07-05",
+          473
+        ],
+        [
+          "2025-07-07",
+          543
+        ],
+        [
+          "2025-07-08",
+          2260
+        ],
+        [
+          "2025-07-10",
+          2520
+        ],
+        [
+          "2025-07-11",
+          2635
+        ],
+        [
+          "2025-07-15",
+          2576
+        ],
+        [
+          "2025-07-18",
+          3089
+        ],
+        [
+          "2025-07-20",
+          3489
+        ],
+        [
+          "2025-07-22",
+          3500
+        ],
+        [
+          "2025-07-23",
+          9060
+        ]
+      ]
+    },
+    {
+      "cycle": 8,
+      "start": "2025-07-24",
+      "payment_date": "2025-08-23",
+      "statement": 1313,
+      "spent": 1211,
+      "budget_left": 2389,
+      "crossed_on": null,
+      "cumulative": [
+        [
+          "2025-07-24",
+          23
+        ],
+        [
+          "2025-07-27",
+          166
+        ],
+        [
+          "2025-07-29",
+          175
+        ],
+        [
+          "2025-08-05",
+          311
+        ],
+        [
+          "2025-08-08",
+          357
+        ],
+        [
+          "2025-08-10",
+          284
+        ],
+        [
+          "2025-08-11",
+          286
+        ],
+        [
+          "2025-08-13",
+          321
+        ],
+        [
+          "2025-08-16",
+          313
+        ],
+        [
+          "2025-08-18",
+          391
+        ],
+        [
+          "2025-08-19",
+          946
+        ],
+        [
+          "2025-08-22",
+          1211
+        ]
+      ]
+    },
+    {
+      "cycle": 9,
+      "start": "2025-08-24",
+      "payment_date": "2025-09-23",
+      "statement": 10019,
+      "spent": 10206,
+      "budget_left": -6606,
+      "crossed_on": "2025-09-18",
+      "cumulative": [
+        [
+          "2025-08-26",
+          74
+        ],
+        [
+          "2025-08-29",
+          264
+        ],
+        [
+          "2025-09-01",
+          266
+        ],
+        [
+          "2025-09-05",
+          1002
+        ],
+        [
+          "2025-09-08",
+          1003
+        ],
+        [
+          "2025-09-11",
+          1017
+        ],
+        [
+          "2025-09-13",
+          971
+        ],
+        [
+          "2025-09-14",
+          1097
+        ],
+        [
+          "2025-09-16",
+          2615
+        ],
+        [
+          "2025-09-18",
+          9540
+        ],
+        [
+          "2025-09-20",
+          10043
+        ],
+        [
+          "2025-09-22",
+          10206
+        ]
+      ]
+    },
+    {
+      "cycle": 10,
+      "start": "2025-09-24",
+      "payment_date": "2025-10-23",
+      "statement": 1349,
+      "spent": 1389,
+      "budget_left": 2211,
+      "crossed_on": null,
+      "cumulative": [
+        [
+          "2025-09-25",
+          288
+        ],
+        [
+          "2025-09-26",
+          383
+        ],
+        [
+          "2025-09-27",
+          405
+        ],
+        [
+          "2025-09-28",
+          505
+        ],
+        [
+          "2025-09-29",
+          548
+        ],
+        [
+          "2025-09-30",
+          857
+        ],
+        [
+          "2025-10-01",
+          898
+        ],
+        [
+          "2025-10-03",
+          719
+        ],
+        [
+          "2025-10-11",
+          723
+        ],
+        [
+          "2025-10-15",
+          768
+        ],
+        [
+          "2025-10-16",
+          992
+        ],
+        [
+          "2025-10-19",
+          1154
+        ],
+        [
+          "2025-10-20",
+          1221
+        ],
+        [
+          "2025-10-23",
+          1389
+        ]
+      ]
+    },
+    {
+      "cycle": 11,
+      "start": "2025-10-24",
+      "payment_date": "2025-11-23",
+      "statement": 3916,
+      "spent": 3767,
+      "budget_left": -167,
+      "crossed_on": "2025-11-22",
+      "cumulative": [
+        [
+          "2025-10-26",
+          -303
+        ],
+        [
+          "2025-10-28",
+          -127
+        ],
+        [
+          "2025-10-30",
+          -106
+        ],
+        [
+          "2025-10-31",
+          119
+        ],
+        [
+          "2025-11-02",
+          174
+        ],
+        [
+          "2025-11-07",
+          305
+        ],
+        [
+          "2025-11-09",
+          236
+        ],
+        [
+          "2025-11-10",
+          237
+        ],
+        [
+          "2025-11-11",
+          439
+        ],
+        [
+          "2025-11-12",
+          830
+        ],
+        [
+          "2025-11-16",
+          869
+        ],
+        [
+          "2025-11-21",
+          1018
+        ],
+        [
+          "2025-11-22",
+          3767
+        ]
+      ]
+    },
+    {
+      "cycle": 12,
+      "start": "2025-11-24",
+      "payment_date": "2025-12-23",
+      "statement": 288,
+      "spent": 431,
+      "budget_left": 3169,
+      "crossed_on": null,
+      "cumulative": [
+        [
+          "2025-11-24",
+          149
+        ],
+        [
+          "2025-11-29",
+          319
+        ],
+        [
+          "2025-12-01",
+          395
+        ],
+        [
+          "2025-12-04",
+          252
+        ],
+        [
+          "2025-12-06",
+          257
+        ],
+        [
+          "2025-12-11",
+          258
+        ],
+        [
+          "2025-12-15",
+          288
+        ],
+        [
+          "2025-12-19",
+          292
+        ],
+        [
+          "2025-12-20",
+          385
+        ],
+        [
+          "2025-12-21",
+          431
+        ]
+      ]
+    }
+  ],
+  "offer": {
+    "product": "pillar 3a",
+    "monthly": 200,
+    "after_one_year": 2400
+  },
+  "insights": [
+    {
+      "id": "year_end_buffer",
+      "kind": "what_happened",
+      "mode": "assert",
+      "summary": "The private account ended the year 8'816 CHF higher than it started. Without the extra salary payment of 7'464 CHF it would have been 1'352 CHF.",
+      "figures": {
+        "yearNet": 8816.36,
+        "extraSalary": 7464,
+        "yearNetWithoutExtra": 1352.36,
+        "baseMonthlySalary": 7464
+      }
+    },
+    {
+      "id": "lowest_balance",
+      "kind": "what_happened",
+      "mode": "assert",
+      "summary": "Measured from the start of the year, the private account was lowest at the end of 2025-09 (-5'640 CHF) and on 2025-10-21 (-7'681 CHF).",
+      "figures": {
+        "lowestMonthEnd": -5639.8,
+        "lowestMonthEndMonth": "2025-09",
+        "lowestDay": -7681.45,
+        "lowestDayDate": "2025-10-21"
+      }
+    },
+    {
+      "id": "statement_shock",
+      "kind": "what_happened",
+      "mode": "assert",
+      "summary": "The largest card statement was 10'019 CHF in 2025-09; 2 statement(s) were larger than the monthly salary of 7'464 CHF.",
+      "figures": {
+        "largestStatement": 10018.53,
+        "largestStatementMonth": "2025-09",
+        "statementsAboveSalary": 2,
+        "smallestStatement": 287.95,
+        "baseMonthlySalary": 7464
+      }
+    },
+    {
+      "id": "card_cycle",
+      "kind": "insight",
+      "mode": "assert",
+      "summary": "The monthly card budget is 3'600 CHF (salary minus average account spending). 4 of 12 card cycles went over it; the largest, ending 2025-09-23, reached 10'206 CHF and crossed the budget on 2025-09-18.",
+      "figures": {
+        "cardBudgetMonthly": 3600,
+        "cyclesOverBudget": 4,
+        "cycles": 12,
+        "worstCycleSpent": 10206,
+        "worstCycleEnd": "2025-09-23",
+        "worstCycleCrossedOn": "2025-09-18"
+      }
+    },
+    {
+      "id": "missing_payment:Krankenkasse:2025-02",
+      "kind": "what_is_missing",
+      "mode": "ask",
+      "summary": "Krankenkasse was paid in 11 of 12 months, usually 982 CHF; there is no payment in 2025-02.",
+      "figures": {
+        "merchant": "Krankenkasse",
+        "missingMonth": "2025-02",
+        "usualAmount": 982,
+        "monthsPaid": 11
+      },
+      "question": "I don't see your Krankenkasse payment for 2025-02. Was it paid from another account?",
+      "answers": [
+        "paid_elsewhere",
+        "missed"
+      ]
+    },
+    {
+      "id": "no_pillar_3a",
+      "kind": "what_is_missing",
+      "mode": "ask",
+      "summary": "There is no 3a payment or savings transfer in 2025. The 3a maximum for employees with a pension fund is 7'258 CHF.",
+      "figures": {
+        "pillar3aLimit": 7258,
+        "savingsTransfers": 0
+      },
+      "question": "I don't see any 3a or savings payments this year. Do you have a 3a account at another bank?",
+      "answers": [
+        "has_elsewhere",
+        "none"
+      ]
+    },
+    {
+      "id": "double_charge:Mondrian London:2025-07-08",
+      "kind": "insight",
+      "mode": "ask",
+      "summary": "Mondrian London charged 743 CHF twice on 2025-07-08 and nothing was refunded.",
+      "figures": {
+        "merchant": "Mondrian London",
+        "date": "2025-07-08",
+        "amount": 743.2,
+        "charges": 2
+      },
+      "question": "Mondrian London charged you 743.20 CHF twice on 2025-07-08. Was that two bookings, or should we dispute one?",
+      "answers": [
+        "legit",
+        "duplicate"
+      ]
+    },
+    {
+      "id": "refund_heavy:Abercrombie & Fitch",
+      "kind": "insight",
+      "mode": "assert",
+      "summary": "Abercrombie & Fitch shows 3'397 CHF in 21 purchases, but 2'491 CHF came back; the real cost is 906 CHF.",
+      "figures": {
+        "merchant": "Abercrombie & Fitch",
+        "gross": 3397.45,
+        "refunds": 2491.31,
+        "net": 906.14,
+        "purchases": 21
+      }
+    },
+    {
+      "id": "habit_stopped:Digitec Galaxus",
+      "kind": "insight",
+      "mode": "assert",
+      "summary": "18 purchases at Digitec Galaxus (4'462 CHF) until 2025-06, then none.",
+      "figures": {
+        "merchant": "Digitec Galaxus",
+        "purchases": 18,
+        "net": 4461.75,
+        "lastMonth": "2025-06"
+      }
+    },
+    {
+      "id": "one_off_pot",
+      "kind": "advice",
+      "mode": "assert",
+      "summary": "6 big one-off purchases cost 24'540 CHF this year. Setting aside 2'045 CHF a month would cover them without a statement shock.",
+      "figures": {
+        "oneOffTotal": 24540.4,
+        "monthlyPot": 2045.03,
+        "purchases": 6
+      }
+    },
+    {
+      "id": "tag:Libero-Tarifverbund",
+      "kind": "insight",
+      "mode": "ask",
+      "summary": "Libero-Tarifverbund is tagged as fixed (Annual public transport pass.), but this is uncertain.",
+      "figures": {
+        "merchant": "Libero-Tarifverbund",
+        "necessity": "compulsory"
+      },
+      "question": "Do you use the Libero pass for commuting to work?",
+      "answers": [
+        "yes",
+        "no"
+      ]
+    }
+  ]
+}

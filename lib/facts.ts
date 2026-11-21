@@ -1,3 +1,4 @@
+import { cardBudgetMonthly, cardCycles } from "@/lib/card-cycle";
 import { getBalanceSeries } from "@/lib/intelligence";
 import { groupLabels, necessities, necessityLabels, ruleTags, type MerchantTag } from "@/lib/merchant-tags";
 import type { Transaction } from "@/lib/models";
@@ -49,6 +50,8 @@ export interface FactsSummary {
     adjustable: { merchant: string; yearly: number }[];
     flexibleHabits: { merchant: string; yearly: number; purchases: number }[];
   };
+  /** The one option the advisor may offer; confirmed by touch only. */
+  offer: { product: string; monthly: number; after_one_year: number };
   insights: Insight[];
   openQuestions: { subject: string; question: string; answers: string[] }[];
   notes: { subject: string; answer: string; text: string }[];
@@ -57,6 +60,9 @@ export interface FactsSummary {
 
 /** Swiss pillar 3a maximum for employees with a pension fund, 2025. */
 export const PILLAR_3A_LIMIT_2025 = 7258;
+
+/** The single offer: CHF 200 a month into pillar 3a. */
+export const OFFER = { product: "pillar 3a", monthly: 200, after_one_year: 2400 } as const;
 
 const round = (value: number) => Math.round(value * 100) / 100;
 const month = (date: string) => date.slice(0, 7);
@@ -153,6 +159,30 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
     }
   }
 
+  // 3b. Card cycle: the statement equals net card spending since the previous payment; the monthly card budget is
+  //     the base salary minus average monthly private spending (card payments excluded).
+  const cardBudget = cardBudgetMonthly(selected);
+  const cycles = cardCycles(selected, cardBudget).filter((c) => c.paymentDate !== null);
+  if (cardAccount && cycles.length && cardBudget > 0) {
+    const over = cycles.filter((c) => c.crossedOn !== null);
+    const worst = [...cycles].sort((a, b) => b.spent - a.spent)[0];
+    add({
+      id: "card_cycle",
+      kind: "insight",
+      mode: "assert",
+      summary: `The monthly card budget is ${chf(cardBudget)} (salary minus average account spending). ${over.length} of ${cycles.length} card cycles went over it; the largest, ending ${worst.paymentDate}, reached ${chf(worst.spent)} and crossed the budget on ${worst.crossedOn}.`,
+      figures: {
+        cardBudgetMonthly: cardBudget,
+        cyclesOverBudget: over.length,
+        cycles: cycles.length,
+        worstCycleSpent: worst.spent,
+        worstCycleEnd: worst.paymentDate ?? "",
+        worstCycleCrossedOn: worst.crossedOn ?? ""
+      },
+      evidence: []
+    });
+  }
+
   // 4. A regular obligation that skipped a month.
   const allMonths = monthsBetween(periodStart, periodEnd);
   for (const m of profile.merchants.filter((p) => p.necessity === "compulsory" && p.pattern === "regular")) {
@@ -195,7 +225,7 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
     const key = `${t.merchant}|${t.date}|${t.amount}`;
     pairs.set(key, [...(pairs.get(key) ?? []), t]);
   }
-  const groupOf = (merchant: string) => tags.find((tag) => tag.merchant === merchant)?.group ?? "other";
+  const groupOf = (merchant: string) => tags.find((tag) => tag.merchant === merchant)?.group ?? "Other";
   const twoOfAKind = [...pairs.values()].filter((items) => items.length === 2 && Math.abs(items[0].amount) >= 100);
   const days = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
   for (const items of twoOfAKind) {
@@ -291,6 +321,7 @@ export function buildFacts(transactions: Transaction[], currency: string, tags: 
       adjustable: profile.levers.adjustable.map((m) => ({ merchant: m.merchant, yearly: m.net })),
       flexibleHabits: profile.levers.flexibleHabits.map((m) => ({ merchant: m.merchant, yearly: m.net, purchases: m.count }))
     },
+    offer: { ...OFFER },
     insights,
     openQuestions: insights.filter((i) => i.mode === "ask").map((i) => ({ subject: i.id, question: i.question!, answers: i.answers! })),
     notes: notes.map((n) => ({ subject: n.subject, answer: n.answer, text: n.text })),
