@@ -1,8 +1,11 @@
 import type { Keepsake } from "@/lib/savings-plan";
-import type { Beat, BeatQuestion, ConversationMode, Cue, DirectorResponse, Figure, Script, Snapshot } from "@/lib/contracts";
+import type { Beat, BeatAnswer, BeatQuestion, ConversationMode, Cue, DirectorResponse, Figure, Script, Snapshot } from "@/lib/contracts";
 
 /** What a spoken line is, for the step bar and caption colour. */
 export type LineKind = "main" | "side" | "bridge" | "filler" | "failure";
+
+/** A question the presentation asked: stays on screen with its assumption until answered. `answer` is the chosen answer id. */
+export type OpenPoint = { subject: string; label: string; assume: string; answers: BeatAnswer[]; answer: string | null };
 
 /** Everything the UI shell needs to draw. Emitted by the player and the conversation. */
 export type EngineEvent =
@@ -25,6 +28,8 @@ export type EngineEvent =
   | { type: "script"; kind: "main" | "side"; script: Script; source?: DirectorResponse["source"] }
   /** A main beat asked the user (show its answers as chips); null when it is answered or dropped. */
   | { type: "question"; question: BeatQuestion | null }
+  /** Every question asked so far (in order), answered or not; empty after a start over. */
+  | { type: "openPoints"; points: OpenPoint[] }
   /** A prepared answer leaves something to keep (the savings slip). Emitted after its "script"; its side beats reveal it line by line. */
   | { type: "keep"; keepsake: Keepsake }
   | { type: "error"; message: string };

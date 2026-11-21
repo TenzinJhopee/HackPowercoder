@@ -22,6 +22,8 @@ export interface ValidationContext {
   toolResults?: Iterable<number>;
   /** False when she already has a 3a account elsewhere: no offer card then. Default true. */
   allowOffer?: boolean;
+  /** The only amounts a sentence may call a saving or a cut: her own target from the question and the offer amounts. Default none. */
+  savingsAllowed?: Iterable<number>;
 }
 
 export type ValidationResult = { ok: true; script: Script; dropped: string[] } | { ok: false; error: string };
@@ -51,22 +53,46 @@ export function extractNumbers(text: string): number[] {
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
-/** Allowed set plus the tolerance: nearest 1 and nearest 100 of every allowed number. */
+/** Savings and cuts are never computed by the model: a stated amount must be her own target or the offer. */
+const SAVE_VERB = /\b(?:sav(?:e|es|ed|ing|ings))\s+(?:(?:about|around|roughly|nearly|up to|another|an extra|a further|only|just|at least|almost)\s+)*(?:chf\s+)?(\d{1,3}(?:[,'’]\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)/gi;
+const CUT_BY = /\b(?:cut(?:ting|s)?|trim(?:ming|s)?|reduc(?:e|es|ing)|lower(?:ing|s)?)\b[^.?!]{0,40}?\bby\s+(?:about\s+|around\s+|up to\s+)?(\d{1,3}(?:[,'’]\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)/gi;
+const SAVED_AMOUNT = /(\d{1,3}(?:[,'’]\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*(?:francs?\s+)?(?:a month\s+|per month\s+|a year\s+)?(?:in\s+|of\s+)?(?:savings?|saved)\b/gi;
+
+/** Amounts a sentence presents as a saving or a cut ("could save 73", "cut it by 300", "40 francs in savings"). */
+export function savingsAmounts(text: string): number[] {
+  const found: number[] = [];
+  for (const pattern of [SAVE_VERB, CUT_BY, SAVED_AMOUNT]) {
+    for (const match of text.matchAll(pattern)) {
+      const value = Number(match[1].replace(/[,'’]/g, ""));
+      if (Number.isFinite(value)) found.push(value);
+    }
+  }
+  return found;
+}
+
+/**
+ * Allowed set plus the spoken-rounding tolerance: only amounts of 1,000 and more may be rounded to the nearest 100
+ * ("about 4,400"). Smaller amounts must match exactly, so a coincidental small number cannot pass.
+ */
 function buildAllowed(ctx: ValidationContext) {
   const set = new Set<number>(ctx.allowed);
   for (const value of ctx.toolResults ?? []) set.add(value);
-  for (const value of [...set]) {
-    set.add(Math.round(value));
-    set.add(Math.round(value / 100) * 100);
+  const rounded = new Set<number>();
+  for (const value of set) {
+    if (Math.abs(value) >= 1000) rounded.add(Math.round(value / 100) * 100);
   }
-  return set;
+  return { exact: set, rounded };
 }
 
-function isAllowedNumber(value: number, allowed: Set<number>) {
+type AllowedNumbers = ReturnType<typeof buildAllowed>;
+
+function isAllowedNumber(value: number, allowed: AllowedNumbers) {
   if (value === 0) return true;
   if (Number.isInteger(value) && value >= 1 && value <= 12) return true; // month numbers
   if (Number.isInteger(value) && value >= 1900 && value <= 2100) return true; // years
-  return allowed.has(value) || allowed.has(round2(value)) || allowed.has(Math.round(value));
+  if (allowed.exact.has(value) || allowed.exact.has(round2(value))) return true;
+  if (value < 1000) return false;
+  return allowed.exact.has(Math.round(value)) || allowed.rounded.has(value) || allowed.rounded.has(Math.round(value));
 }
 
 // ---------- helpers ----------
@@ -109,7 +135,7 @@ function readFigure(value: unknown): Figure | undefined {
 // ---------- breakdown ----------
 
 /** Returns the cleaned breakdown, `undefined` when it must be dropped, or "invented" when a value is not from code. */
-function readBreakdown(raw: unknown, ctx: ValidationContext, allowed: Set<number>): Breakdown | undefined | "invented" {
+function readBreakdown(raw: unknown, ctx: ValidationContext, allowed: AllowedNumbers): Breakdown | undefined | "invented" {
   if (!isRecord(raw)) return undefined;
   const month = raw.month;
   if (typeof month !== "number" || !Number.isInteger(month) || month < 1 || month > 12) return undefined;
@@ -146,13 +172,15 @@ function readBreakdown(raw: unknown, ctx: ValidationContext, allowed: Set<number
 
 type BeatResult = { beat: Beat } | { reason: string };
 
-function readBeat(raw: unknown, ctx: ValidationContext, allowed: Set<number>): BeatResult {
+function readBeat(raw: unknown, ctx: ValidationContext, allowed: AllowedNumbers, savingsAllowed: Set<number>): BeatResult {
   if (!isRecord(raw)) return { reason: "not an object" };
   if (typeof raw.say !== "string" || !raw.say.trim()) return { reason: "no say" };
   const say = truncateSay(raw.say);
 
   const invented = extractNumbers(say).find((n) => !isAllowedNumber(n, allowed));
   if (invented !== undefined) return { reason: `invented number ${invented} in say` };
+  const saving = savingsAmounts(say).find((n) => !savingsAllowed.has(n));
+  if (saving !== undefined) return { reason: `invented savings amount ${saving} in say` };
 
   const beat: Beat = { say };
 
@@ -211,11 +239,12 @@ export function validateScript(raw: unknown, ctx: ValidationContext): Validation
   if (!list) return { ok: false, error: "no_script" };
 
   const allowed = buildAllowed(ctx);
+  const savingsAllowed = new Set(ctx.savingsAllowed ?? []);
   const script: Beat[] = [];
   const dropped: string[] = [];
   for (const entry of list) {
     if (script.length >= MAX_BEATS) break;
-    const result = readBeat(entry, ctx, allowed);
+    const result = readBeat(entry, ctx, allowed, savingsAllowed);
     if ("reason" in result) dropped.push(result.reason);
     else script.push(result.beat);
   }

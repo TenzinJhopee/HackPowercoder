@@ -22,7 +22,7 @@ const breakdown = (month: number): Breakdown => ({ month, parts: facts.monthly_b
 
 export const MAIN: Script = [
   {
-    say: "This is your 2025, Jeanine: 97,032 francs came in, and each grain is a hundred francs.",
+    say: "This is your 2025, Jeanine: 97,032 francs came in, and each banknote is a hundred francs.",
     scene: { type: "galaxy" },
     figure: { label: "Income in 2025", value: 97032 },
     bridge: "We had just started with your year as a whole."
@@ -40,6 +40,8 @@ export const MAIN: Script = [
     bridge: "I had asked whether these accounts are everything.",
     question: {
       subject: "accounts_complete",
+      label: "Other accounts or cards",
+      assume: "I treat what's left each month as an upper bound, since some spending may be paid another way.",
       answers: [
         { id: "has_other", label: "Yes, I have another account", kind: "yes" },
         { id: "complete", label: "No, this is everything", kind: "no" }
@@ -80,6 +82,8 @@ export const MAIN: Script = [
     bridge: "We were at the February payment I could not find.",
     question: {
       subject: "missing_payment:Krankenkasse:2025-02",
+      label: "February health insurance",
+      assume: "I don't count it as missed; February simply shows no payment here.",
       answers: [
         { id: "paid_elsewhere", label: "Yes, from another account", kind: "yes" },
         { id: "missed", label: "No, it was missed", kind: "no" }
@@ -93,6 +97,8 @@ export const MAIN: Script = [
     bridge: "I had asked about your tax payments.",
     question: {
       subject: "tax_provision",
+      label: "How tax is paid",
+      assume: "I only count the tax payments I can see and never estimate what you owe.",
       answers: [
         { id: "handled_elsewhere", label: "Yes, it is handled elsewhere", kind: "yes" },
         { id: "not_yet", label: "No, not yet", kind: "no" }
@@ -109,6 +115,8 @@ export const MAIN: Script = [
     bridge: "We were looking at what did not start this year.",
     question: {
       subject: "no_pillar_3a",
+      label: "Pillar 3a and savings",
+      assume: "Until you tell me, I keep the pillar 3a option in the plan.",
       answers: [
         { id: "has_elsewhere", label: "Yes, at another bank", kind: "yes", skipOffer: true },
         { id: "none", label: "No, I have none", kind: "no" }
@@ -140,9 +148,19 @@ export type SideAnswer = {
   keep?: (question: string) => Keepsake | null;
   /** Short spoken reactions before the answer (rotated); no numbers. */
   lead?: readonly string[];
+  /** True when the question asks for more than the fixed answer tells: the live director goes first, this is the fallback. */
+  live?: (question: string) => boolean;
 };
 
 const asks = (pattern: RegExp) => (question: string) => pattern.test(question.toLocaleLowerCase("en"));
+
+/**
+ * A month question the fixed month story does not answer: an amount, a merchant ("at Digitec"), a day, the card bill,
+ * a category, saving or what comes next. "Why was June so high?" stays with the fixed story.
+ */
+const beyondMonthStory = asks(
+  /\bhow\s+(much|many|often)\b|(?<!\blook\s)\bat\s+(?!all\b)\w|\bon\s+(the\s+)?\d|\b(between|before|after|until|since|when|compared?|versus|vs|card|bill|statement|budget|forecast|next|subscriptions?|recurring|regular|fixed|sav(e|ing|ings)|cut|afford|refund(s|ed)?|travel|trips?|flights?|cloth(es|ing)|food|restaurants?|rent|insurance|tax(es)?)\b/
+);
 
 // ---------- "Can I afford this?" (built from the question; measured against what she kept last year, not a forecast) ----------
 
@@ -306,6 +324,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
     id: "june",
     lead: ["Sure, let's look at June.", "June, yes, good question."],
     match: asks(/\bjun(e)?\b/),
+    live: beyondMonthStory,
     script: [
       {
         say: "Let me open June: the bike alone cost 6,000 francs.",
@@ -331,6 +350,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
     id: "july",
     lead: ["Sure, let's look at July.", "July, yes, let me show you."],
     match: asks(/\bjul(y)?\b/),
+    live: beyondMonthStory,
     script: [
       {
         say: "July reached 12,363 francs; let me open the column.",
@@ -361,6 +381,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
     id: "september",
     lead: ["Ah, September, the tall one.", "Good eye, let's look at September."],
     match: asks(/\bsep(t|tember)?\b/),
+    live: beyondMonthStory,
     script: [
       {
         say: "September is your tallest bar at 14,363 francs; let me open it.",
@@ -390,6 +411,7 @@ export const SIDE_ANSWERS: SideAnswer[] = [
     id: "november",
     lead: ["Sure, let's look at November.", "November, yes, let me show you."],
     match: asks(/\bnov(ember)?\b/),
+    live: beyondMonthStory,
     script: [
       {
         say: "November came to 7,390 francs; let me open it.",

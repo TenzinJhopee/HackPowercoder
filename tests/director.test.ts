@@ -198,6 +198,11 @@ test("prepared answers cover saving and habit questions without stealing month o
   assert.equal(match("How can I save in November?"), "november");
   assert.equal(match("Why is September so high?"), "september");
   assert.equal(match("what about my savings?"), undefined);
+  // Month answers keep the "why was it high" story; anything more specific goes to the live director first.
+  const live = (question: string) => !!SIDE_ANSWERS.find((a) => a.match(question))?.live?.(question);
+  for (const q of ["Wait, why is September so high?", "Why was November high?", "June?", "Let's look at July", "What happened in June?"]) assert.equal(live(q), false, q);
+  for (const q of ["How much did I spend at Digitec in June?", "What was my card bill in September?", "How can I save in November?", "What did I buy on 18 September?"])
+    assert.equal(live(q), true, q);
   const save = SIDE_ANSWERS.find((a) => a.id === "save")!.script as Script;
   assert.equal(save.filter((b) => b.offer).length, 1);
   assert.ok(save.at(-1)?.offer);

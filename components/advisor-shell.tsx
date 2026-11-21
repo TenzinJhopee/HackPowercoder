@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Chips, InputRow, ProgressPill, StatusBar, useInputFocus } from "./controls";
 import { OfferCard } from "./offer-card";
+import { OpenPoints } from "./open-points";
 import { SavingsSlip } from "./savings-slip";
 import { ScriptPanel } from "./script-panel";
 import { Stage } from "./stage";
@@ -54,6 +55,11 @@ export function AdvisorShell() {
             ) : (
               <>
                 <Transcript log={advisor.log} line={advisor.line} lineKind={advisor.lineKind} />
+                {advisor.points.length > 0 && (
+                  <div className="md:max-h-44 md:shrink-0 md:overflow-y-auto">
+                    <OpenPoints points={advisor.points} onAnswer={advisor.answer} />
+                  </div>
+                )}
                 {advisor.slip && (
                   <div className="md:max-h-56 md:shrink-0 md:overflow-y-auto">
                     <SavingsSlip slip={advisor.slip} onClose={advisor.closeSlip} />

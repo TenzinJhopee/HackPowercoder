@@ -70,7 +70,7 @@ export function Stage({ world, figure, pausedAt, status }: { world: GrainWorld; 
         <StageCanvas world={world} />
       </div>
       <div className="mt-3 flex min-h-[1.75rem] shrink-0 items-center justify-between gap-3">
-        <p className="shrink-0 text-xs text-faint">1 grain = CHF 100</p>
+        <p className="shrink-0 text-xs text-faint">1 note = CHF 100</p>
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           {pausedAt && <span className="rounded-full bg-saved/10 px-3 py-1 text-xs font-medium text-saved-ink">{`↩ Paused at ${pausedAt}`}</span>}
           {status}

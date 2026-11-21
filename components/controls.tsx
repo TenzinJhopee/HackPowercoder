@@ -13,7 +13,7 @@ const modeText: Record<ConversationMode, string> = {
   listening: "Listening…",
   side: "Answering your question",
   waiting: "Shall we continue?",
-  answering: "Waiting for your answer",
+  answering: "Answer if you like",
   returning: "Picking up where we left off",
   finished: "Finished"
 };
