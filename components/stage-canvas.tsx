@@ -117,7 +117,7 @@ export function StageCanvas({ world }: { world: GrainWorld }) {
         ref={ref}
         className={`block h-full w-full select-none ${zoomed ? "touch-none cursor-grab active:cursor-grabbing" : "touch-pan-y"}`}
         role="img"
-        aria-label="Whiteboard: grains of CHF 100 arranged for the current scene. Drag to pan, pinch or Ctrl + scroll to zoom."
+        aria-label="Whiteboard: banknotes of CHF 100 arranged for the current scene. Drag to pan, pinch or Ctrl + scroll to zoom."
       />
       <button
         type="button"

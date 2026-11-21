@@ -22,7 +22,7 @@ const breakdown = (month: number): Breakdown => ({ month, parts: facts.monthly_b
 
 export const MAIN: Script = [
   {
-    say: "This is your 2025, Jeanine: 97,032 francs came in, and each grain is a hundred francs.",
+    say: "This is your 2025, Jeanine: 97,032 francs came in, and each banknote is a hundred francs.",
     scene: { type: "galaxy" },
     figure: { label: "Income in 2025", value: 97032 },
     bridge: "We had just started with your year as a whole."

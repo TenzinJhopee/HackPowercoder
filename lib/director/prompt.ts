@@ -60,7 +60,7 @@ Use only FACTS.affordability: the amount compared with what the private account 
 
 # Scenes and targets
 Scene types: galaxy, river, pools, travel, jars, level, monthly.
-- galaxy: all of the year's money as grains, no target.
+- galaxy: all of the year's money as banknotes (each one CHF 100), no target.
 - river: income flowing into spending groups; target = a group label.
 - pools: one pool per spending group; target = a group label from FACTS.labels.groups (for example "Housing"), or "Left over".
 - travel: travel money split into trips; target = a trip name.
