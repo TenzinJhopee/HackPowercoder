@@ -24,7 +24,8 @@ export const palette = {
   spend: rgb(theme.spend),
   coral: rgb(theme.coral),
   saved: rgb(theme.saved),
-  faint: rgb(theme.faint)
+  faint: rgb(theme.faint),
+  brand: rgb(theme.brand)
 } as const;
 
 /** Deterministic noise in [0, 1) per grain and salt: everything visible is seeded (backup video must replay). */

@@ -50,6 +50,13 @@ const CHF_BAND_A = [240, 184, 72] as const;
 const CHF_BAND_B = [232, 116, 60] as const;
 const CHF_STRIP = [226, 235, 240] as const;
 const EDGE_STYLE = "rgba(11,13,18,0.3)";
+/** Colours within this RGB distance of `theme.brand` (PostFinance yellow) get a teal edge, so yellow reads on white. */
+const BRAND_REACH = 70;
+const BRAND = [
+  parseInt(theme.brand.slice(1, 3), 16),
+  parseInt(theme.brand.slice(3, 5), 16),
+  parseInt(theme.brand.slice(5, 7), 16)
+] as const;
 
 type Col = readonly number[];
 const mixTo = (a: Col, b: Col, t: number, out: number[]) => {
@@ -75,6 +82,15 @@ function paintNote(r: number, g: number, b: number, small: boolean): HTMLCanvasE
   const d = Math.sqrt((r - PAPER[0]) ** 2 + (g - PAPER[1]) ** 2 + (b - PAPER[2]) ** 2);
   const p = Math.max(0, Math.min(1, 1 - d / PAPER_REACH));
   const t = [0, 0, 0];
+  const db = Math.sqrt((r - BRAND[0]) ** 2 + (g - BRAND[1]) ** 2 + (b - BRAND[2]) ** 2);
+  const q = Math.max(0, Math.min(1, 1 - db / BRAND_REACH));
+  /** Teal (#004B5A) outline fading in near brand yellow; on the small sprite it is the only edge. */
+  const brandEdge = (w: number) => {
+    if (q <= 0) return;
+    x.strokeStyle = `rgba(0,75,90,${(0.5 * q).toFixed(3)})`;
+    x.lineWidth = w;
+    x.strokeRect(w / 2, w / 2, W - w, H - w);
+  };
   const block = (tint: Col, chf: Col, x0: number, y0: number, x1: number, y1: number) => {
     x.fillStyle = css(mixTo(tint, chf, p, [0, 0, 0]));
     x.fillRect(x0 * W, y0 * H, (x1 - x0) * W, (y1 - y0) * H);
@@ -82,6 +98,7 @@ function paintNote(r: number, g: number, b: number, small: boolean): HTMLCanvasE
   block(c, CHF_BODY, 0, 0, 1, 1);
   if (small) {
     block(mixTo(c, WHITE, 0.38, t), mixTo(CHF_BAND_A, CHF_BAND_B, 0.5, [0, 0, 0]), 0.34, 0.56, 0.78, 0.9);
+    brandEdge(1);
     return cv;
   }
   block(mixTo(c, BLACK, 0.2, t), CHF_DEEP, 0, 0.56, 0.31, 1);
@@ -94,6 +111,7 @@ function paintNote(r: number, g: number, b: number, small: boolean): HTMLCanvasE
   x.strokeStyle = EDGE_STYLE;
   x.lineWidth = 1;
   x.strokeRect(0.5, 0.5, W - 1, H - 1);
+  brandEdge(2);
   return cv;
 }
 

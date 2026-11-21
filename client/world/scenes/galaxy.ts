@@ -6,7 +6,7 @@ import { Scene, type ApplyKind } from "./base";
 const ROOM = 0.7;
 const WANDER = 0.6;
 
-/** Opening scene: the year's income as paper notes filling the PostFinance mark, each note wandering gently in place. */
+/** Opening scene: the year's income as PostFinance-yellow notes filling the PostFinance mark, each note wandering gently in place. */
 export class GalaxyScene extends Scene {
   readonly type = "galaxy" as const;
   private order: number[] = [];
@@ -61,7 +61,7 @@ export class GalaxyScene extends Scene {
       };
       this.engine.place(
         g,
-        { x, y, color: palette.paper, alpha: 0.4 + 0.45 * noise(g.id, 20), r, dim: 1, motion },
+        { x, y, color: palette.brand, alpha: 0.82 + 0.18 * noise(g.id, 20), r, dim: 1, motion },
         this.flight(kind, g, { order: k / n, group: 0, groups: 1, x, y, cx, cy }, k, n)
       );
     });

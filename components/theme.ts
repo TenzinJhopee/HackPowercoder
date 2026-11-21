@@ -16,5 +16,7 @@ export const theme = {
   faint: "#66748a",
   spend: "#e08d12",
   coral: "#ec615c",
-  saved: "#2fa36b"
+  saved: "#2fa36b",
+  /** PostFinance yellow: only the opening logo pile (brand, not data; distinct from spend amber). */
+  brand: "#ffcc00"
 } as const;
