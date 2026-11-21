@@ -20,6 +20,8 @@ export interface ValidationContext {
   monthTotals: number[];
   /** Results of `total` tool calls made while answering. */
   toolResults?: Iterable<number>;
+  /** False when she already has a 3a account elsewhere: no offer card then. Default true. */
+  allowOffer?: boolean;
 }
 
 export type ValidationResult = { ok: true; script: Script; dropped: string[] } | { ok: false; error: string };
@@ -214,6 +216,11 @@ export function validateScript(raw: unknown, ctx: ValidationContext): Validation
     else script.push(result.beat);
   }
   if (!script.length) return { ok: false, error: dropped.length ? `all_beats_invalid: ${dropped.join("; ")}` : "empty_script" };
+
+  // The offer card is the one pillar 3a option: only the last beat may carry it, and only when it says so.
+  script.forEach((beat, index) => {
+    if (beat.offer && !(ctx.allowOffer !== false && index === script.length - 1 && /\b3a\b/i.test(beat.say))) delete beat.offer;
+  });
 
   // The first beat stays on the scene she is looking at.
   const first = script[0];

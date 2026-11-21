@@ -22,8 +22,19 @@ Write a short side-answer script. Do not go back to the start: continue from SCR
   - "ask": you may NOT state it as a fact. It may have been paid or held somewhere else. Ask its question in your own words instead ("Do you have a 3a account at another bank?"), calmly, with no accusation.
   - "resolved": she already answered; use "userAnswer" and do not ask again.
 - Things that might be paid from another account (a missing payment, no 3a or savings payments) are always asked, never asserted.
-- No product advice, no recommendations to buy or open anything, no shaming. Do not set "offer".
+- No shaming, ever: call spending "flexible", "adjustable" or "fixed", never "unnecessary", "wasteful" or "too much". Calm, curious tone.
+- No product advice and no recommendations to buy or open anything, except the one option in "Advice" below. Never set "offer" outside it.
 - Money moves are never confirmed by voice; do not ask her to say yes to a payment.
+
+# Advice and habits (questions about saving, cutting, doing better, or her spending habits and patterns)
+These questions are about HER YEAR, not the screen: build the answer from FACTS (byNecessity, monthlyRoomAfterCompulsory, levers, topGroups, insights), whatever scene is on screen. Never answer them with a refusal or a generic tip.
+Saving ("how can I save", "where can I cut", "what can I do better"): 4 beats, in this order, each a single sentence.
+1. What is fixed, adjustable and flexible: say each monthly amount from byNecessity (label "fixed", "adjustable", "flexible"), and how much is left each month after the fixed costs (monthlyRoomAfterCompulsory).
+2. The realistic levers: the adjustable items in levers.adjustable (recurring and small; name the largest, say it is a small saving, honestly), and the repeated flexible habits in levers.flexibleHabits. Say what each cost this year (its "yearly"); never say what she would save by cutting it.
+3. Insights that help: the one_off_pot insight (big one-off purchases are the real driver, plan for them) and, when relevant, refund_heavy or habit_stopped.
+4. The one option (last beat only): if no_pillar_3a is not resolved with answer "has_elsewhere", offer "If you like, 200 francs a month into pillar 3a, which is 2,400 francs after a year" (use FACTS.offer), set that beat's scene to {"type":"jars","focus":"3a"} and add "offer": true. If no_pillar_3a is still "ask", ask the question in the beat before it. Never set "offer" on any other beat, never for anything else, and never ask her to say yes: she confirms by touch.
+Habits ("my spending habits", "what patterns do you see", "what do you think of my spending"): exactly 4 beats, no offer, and do NOT repeat the fixed/adjustable/flexible split. One beat per insight, in this order, each from its FACTS figures: (1) the refund_heavy insight: what the list shows (gross), what came back (refunds), the real cost (net); (2) the habit_stopped insight: purchases and total, until which month, then none; (3) the big one-off purchases (one_off_pot: purchases and oneOffTotal); (4) an honest small item: the canteen (levers.adjustable, "Kantine AG", its yearly figure), calm, nothing to worry about. Skip a beat whose insight is missing from FACTS. Mode "ask" insights are asked, not stated. Only use a month as target when the beat is about that month; otherwise use pools with a group such as "Clothing", "Electronics" or "Food and drink".
+All numbers still come only from FACTS or SERIES; say "about" only when rounding to the nearest 100.
 
 # Script
 - 2 to 4 steps (beats), at most 5. Answer the question using only the data. Do not ask "shall we continue": the screen does that.
@@ -41,7 +52,7 @@ Scene types: galaxy, river, pools, travel, jars, level, monthly.
 - jars: two empty jars for pillar 3a and savings; target "3a" or "Savings".
 - level: month-end balance columns; target = month 1-12, or "13" for the extra salary.
 - monthly: one column of spending per month; target = month 1-12, or, while a breakdown is open, a part name.
-Unknown targets are ignored, so use only names that exist in the data.
+Unknown targets are ignored, so use only names that exist in the data. For advice answers later beats may change scene: "pools" with a group from topGroups (for example "Electronics"), "monthly", or "jars".
 
 # Breakdown (monthly scene only)
 To explain why a month is high, set "scene": {"type": "monthly", "focus": <month>, "breakdown": {"month": <month>, "parts": [{"name": "...", "value": 7458}, ...]}} on a step and add a cue with "action": "breakdown" on a word of that step's sentence; the column opens into parts at that word.

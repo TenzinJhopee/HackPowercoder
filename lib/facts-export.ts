@@ -1,5 +1,5 @@
 import { cardAccounts, cardBudgetMonthly, cardCycles, cardPayments } from "@/lib/card-cycle";
-import { OFFER, PILLAR_3A_LIMIT_2025, buildFacts, type Insight } from "@/lib/facts";
+import { OFFER, PILLAR_3A_LIMIT_2025, buildFacts, type FactsSummary, type Insight } from "@/lib/facts";
 import { fallbackTag, ruleTags, spendingGroups, type MerchantTag, type SpendingGroup } from "@/lib/merchant-tags";
 import type { Transaction } from "@/lib/models";
 
@@ -46,6 +46,8 @@ export interface FactsExport {
   card_cycles: CardCycleExport[];
   offer: { product: string; monthly: number; after_one_year: number };
   insights: Omit<Insight, "evidence">[];
+  /** Profile figures for savings and habit answers: fixed / adjustable / flexible split and the realistic levers. */
+  profile: Pick<FactsSummary, "byNecessity" | "monthlyRoomAfterCompulsory" | "levers">;
 }
 
 const round = (value: number) => Math.round(value);
@@ -275,6 +277,7 @@ export function buildFactsExport(transactions: Transaction[], currency = "CHF", 
     card_budget_monthly: budget,
     card_cycles: cycles,
     offer: { ...OFFER },
-    insights
+    insights,
+    profile: { byNecessity: facts.byNecessity, monthlyRoomAfterCompulsory: facts.monthlyRoomAfterCompulsory, levers: facts.levers }
   };
 }

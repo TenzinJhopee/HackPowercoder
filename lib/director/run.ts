@@ -52,7 +52,8 @@ export async function runDirector(input: DirectorInput): Promise<DirectorRespons
       currentScene: input.request.screen.scene,
       allowed,
       monthTotals: series.monthlySpending,
-      toolResults: output.toolResults
+      toolResults: output.toolResults,
+      allowOffer: !facts.insights.some((i) => i.id === "no_pillar_3a" && i.mode === "resolved" && i.userAnswer === "has_elsewhere")
     });
     if (!result.ok) return fallbackResponse(result.error);
     return { script: result.script, source: "model" };

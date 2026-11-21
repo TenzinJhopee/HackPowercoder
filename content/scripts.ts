@@ -196,6 +196,71 @@ export const SIDE_ANSWERS: SideAnswer[] = [
         cues: [{ word: "insurance", target: "Health insurance" }]
       }
     ]
+  },
+  {
+    // Savings advice: fixed / adjustable / flexible, the realistic levers, then the one option (touch-confirmed).
+    id: "save",
+    match: asks(
+      /\bhow\s+(can|could|do|should|would)\s+i\s+(save|spend\s+less|cut|put\s+aside|set\s+aside)|\b(save|saving)\s+(more\s+|some\s+)?money\b|\bwhere\s+(can|could|should)\s+i\s+(cut|save|spend\s+less|reduce)|\bwhat\s+(can|could|should)\s+i\s+do\s+(better|differently)|\b(cut|reduce|lower)\s+(down\s+)?(my\s+)?(spending|costs|expenses)\b|\bspend\s+less\b/
+    ),
+    script: [
+      {
+        say: "Each month, 3,081 francs are fixed, 297 adjustable and 3,988 flexible.",
+        scene: { type: "pools" },
+        cues: [
+          { word: "fixed", target: "Housing" },
+          { word: "flexible", target: "Electronics" }
+        ]
+      },
+      {
+        say: "After the fixed costs, 4,383 francs of your salary are left each month.",
+        scene: { type: "pools" },
+        cues: [{ word: "left", target: "Left over", figure: { label: "Left each month after fixed costs", value: 4383 } }]
+      },
+      {
+        say: "Small levers: the canteen, 1,616 francs, and habits like Orell Fuessli, 1,747 in 24 purchases.",
+        scene: { type: "pools" },
+        cues: [{ word: "canteen", target: "Food and drink", figure: { label: "Canteen in 2025", value: 1616 } }]
+      },
+      {
+        say: "If you have no 3a yet, 200 francs a month into pillar 3a makes 2,400 in a year.",
+        scene: { type: "jars", focus: "3a" },
+        cues: [
+          { word: "pillar", target: "3a" },
+          { word: "2,400", figure: { label: "In pillar 3a after one year", value: 2400 } }
+        ],
+        offer: true
+      }
+    ]
+  },
+  {
+    // Habits: what the list hides, what changed, the big one-offs and an honest small item. No offer.
+    id: "habits",
+    match: asks(
+      /\bhabits?\b|\bpatterns?\b|\bwhat\s+do\s+you\s+think\s+(of|about)\s+my\s+(spending|money|finances)\b/
+    ),
+    script: [
+      {
+        say: "Abercrombie & Fitch shows 3,397 francs in purchases, but 2,491 came back; the real cost is 906.",
+        scene: { type: "pools" },
+        cues: [{ word: "real", target: "Clothing", figure: { label: "Abercrombie & Fitch, real cost", value: 906 } }]
+      },
+      {
+        say: "Digitec was a habit: 18 purchases, 4,462 francs, then nothing after June.",
+        scene: { type: "pools" },
+        cues: [{ word: "habit", target: "Electronics", figure: { label: "Digitec until June", value: 4462 } }]
+      },
+      {
+        say: "Six big one-off purchases cost 24,540 francs; they are behind your tallest months.",
+        scene: { type: "monthly" },
+        cues: [{ word: "24,540", figure: { label: "Big one-off purchases", value: 24540 } }]
+      },
+      {
+        say: "The canteen is a small item at 1,616 francs, nothing to worry about.",
+        scene: { type: "pools" },
+        cues: [{ word: "canteen", target: "Food and drink" }]
+      }
+    ]
   }
 ];
 

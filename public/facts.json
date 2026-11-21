@@ -1473,5 +1473,87 @@
         "no"
       ]
     }
-  ]
+  ],
+  "profile": {
+    "byNecessity": [
+      {
+        "necessity": "compulsory",
+        "label": "fixed",
+        "yearly": 36968,
+        "monthly": 3080.67,
+        "share": 0.42
+      },
+      {
+        "necessity": "reducible",
+        "label": "adjustable",
+        "yearly": 3558.15,
+        "monthly": 296.51,
+        "share": 0.04
+      },
+      {
+        "necessity": "discretionary",
+        "label": "flexible",
+        "yearly": 47853.12,
+        "monthly": 3987.76,
+        "share": 0.54
+      }
+    ],
+    "monthlyRoomAfterCompulsory": 4383.33,
+    "levers": {
+      "adjustable": [
+        {
+          "merchant": "Kantine AG",
+          "yearly": 1616.15
+        },
+        {
+          "merchant": "Coop Tankstelle Talgut Zentrum",
+          "yearly": 764.55
+        },
+        {
+          "merchant": "Netflix",
+          "yearly": 250.8
+        },
+        {
+          "merchant": "Mobile Provider",
+          "yearly": 238.8
+        },
+        {
+          "merchant": "iTunes.com",
+          "yearly": 63.6
+        }
+      ],
+      "flexibleHabits": [
+        {
+          "merchant": "Digitec Galaxus",
+          "yearly": 4461.75,
+          "purchases": 18
+        },
+        {
+          "merchant": "Orell Fuessli",
+          "yearly": 1747.4,
+          "purchases": 24
+        },
+        {
+          "merchant": "Paypal",
+          "yearly": 1591.8,
+          "purchases": 17
+        },
+        {
+          "merchant": "Amazon",
+          "yearly": 1217.15,
+          "purchases": 12
+        },
+        {
+          "merchant": "Abercrombie & Fitch",
+          "yearly": 906.14,
+          "purchases": 21
+        },
+        {
+          "merchant": "Tommy Hilfiger",
+          "yearly": 810,
+          "purchases": 6
+        }
+      ]
+    }
+  }
 }

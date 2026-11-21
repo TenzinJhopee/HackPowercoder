@@ -3,6 +3,11 @@ import test from "node:test";
 import { getTransactions } from "../lib/database";
 import { buildSeries, totalOf } from "../lib/director/series";
 import { extractNumbers, validateScript, type ValidationContext } from "../lib/director/validate";
+import fs from "node:fs";
+import { SIDE_ANSWERS } from "../content/scripts";
+import { allowedNumbers, buildFacts } from "../lib/facts";
+import { loadAccountCsv } from "../lib/load-accounts";
+import { buildDataBlock, DIRECTOR_INSTRUCTIONS } from "../lib/director/prompt";
 
 const monthlySpending = [5994, 7063, 6028, 6626, 6435, 10365, 12363, 4565, 14363, 3845, 7390, 3342];
 // Series values the facts/series would provide; 14363 is September's spending.
@@ -81,4 +86,50 @@ test("breakdown: 3 % rule, Other remainder, invented values", () => {
 test("no beat left means failure", () => {
   assert.equal(validateScript({ script: [{ scene: { type: "monthly" } }] }, ctx()).ok, false);
   assert.equal(validateScript("nope", ctx()).ok, false);
+});
+
+const load = (file: string) => loadAccountCsv(fs.readFileSync(`data/${file}`, "utf8"), file).transactions;
+
+test("savings and habit questions: prompt carries the levers and the one option", async () => {
+  const transactions = [...load("Account1.csv"), ...load("Account3.csv")];
+  const facts = buildFacts(transactions, "CHF");
+  const block = buildDataBlock(facts, buildSeries(transactions, "CHF", 2025));
+  for (const needle of ["byNecessity", "monthlyRoomAfterCompulsory", "flexibleHabits", "Kantine AG", "refund_heavy:Abercrombie & Fitch", "habit_stopped:Digitec Galaxus", "one_off_pot"]) {
+    assert.ok(block.includes(needle), needle);
+  }
+  for (const needle of ["levers.adjustable", "levers.flexibleHabits", "pillar 3a", "\"offer\": true", "never \"unnecessary\""]) {
+    assert.ok(DIRECTOR_INSTRUCTIONS.includes(needle), needle);
+  }
+});
+
+test("validator accepts savings advice with profile numbers and keeps the offer only on the last 3a beat", async () => {
+  const transactions = [...load("Account1.csv"), ...load("Account3.csv")];
+  const allowed = allowedNumbers(buildFacts(transactions, "CHF"));
+  const script = [
+    { say: "Each month, 3,081 francs are fixed, 297 adjustable and 3,988 flexible.", scene: { type: "pools" }, cues: [{ word: "fixed", target: "Housing" }] },
+    { say: "After the fixed costs, 4,383 francs are left each month.", offer: true },
+    { say: "Small levers: the canteen, 1,616 francs, and habits like Orell Fuessli, 1,747 in 24 purchases." },
+    { say: "If you like, 200 francs a month into pillar 3a makes 2,400 in a year.", scene: { type: "jars", focus: "3a" }, offer: true }
+  ];
+  const result = validateScript(script, ctx({ currentScene: "pools", allowed }));
+  assert.ok(result.ok);
+  assert.equal(result.script.length, 4);
+  assert.deepEqual(result.script.map((b) => b.offer ?? false), [false, false, false, true]);
+  const none = validateScript(script, ctx({ currentScene: "pools", allowed, allowOffer: false }));
+  assert.ok(none.ok && none.script.every((b) => !b.offer));
+  const invented = validateScript([{ say: "You would save 1,234 francs by cutting the canteen." }], ctx({ allowed }));
+  assert.equal(invented.ok, false);
+});
+
+test("prepared answers cover saving and habit questions without stealing month or savings-balance questions", () => {
+  const match = (question: string) => SIDE_ANSWERS.find((a) => a.match(question))?.id;
+  for (const q of ["How can I save money?", "Where can I cut?", "What can I do better?"]) assert.equal(match(q), "save", q);
+  for (const q of ["What do you think of my spending habits?", "What patterns do you see?"]) assert.equal(match(q), "habits", q);
+  assert.equal(match("How can I save in November?"), "november");
+  assert.equal(match("Why is September so high?"), "september");
+  assert.equal(match("what about my savings?"), undefined);
+  const save = SIDE_ANSWERS.find((a) => a.id === "save")!.script;
+  assert.equal(save.filter((b) => b.offer).length, 1);
+  assert.ok(save.at(-1)?.offer);
+  assert.ok(!SIDE_ANSWERS.find((a) => a.id === "habits")!.script.some((b) => b.offer));
 });
