@@ -2,8 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Colours are channel triplets so Tailwind can add opacity (bg-brand/50). The same values drive the canvas
+ * through components/theme.ts. Light is the default; data-theme="dark" (set before first paint, see layout.tsx)
+ * switches to the projector look: deep teal surfaces, cream text, brand yellow for actions.
+ */
 :root {
   color-scheme: light;
+  --c-ink: 0 50 61;
+  --c-muted: 111 140 146;
+  --c-brand: 0 75 90;
+  --c-brand-dark: 0 54 66;
+  --c-on-brand: 255 204 0;
+  --c-sun: 255 204 0;
+  --c-sun-deep: 230 184 0;
+  --c-sun-soft: 255 243 191;
+  --c-on-sun: 0 75 90;
+  --c-canvas: 251 248 236;
+  --c-surface: 255 255 255;
+  --c-line: 233 227 204;
+  --c-soft: 63 102 112;
+  --c-faint: 92 124 132;
+  --c-spend: 224 141 18;
+  --c-coral: 236 97 92;
+  --c-saved: 47 163 107;
+  --c-spend-ink: 163 93 0;
+  --c-coral-ink: 201 67 61;
+  --c-saved-ink: 27 122 76;
+  --selection: 255 240 168;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --c-ink: 243 239 220;
+  --c-muted: 134 169 176;
+  --c-brand: 255 204 0;
+  --c-brand-dark: 230 184 0;
+  --c-on-brand: 0 50 61;
+  --c-sun-soft: 18 66 77;
+  --c-canvas: 0 38 46;
+  --c-surface: 0 50 61;
+  --c-line: 14 78 90;
+  --c-soft: 181 205 209;
+  --c-faint: 143 176 182;
+  --c-spend: 240 164 58;
+  --c-coral: 255 122 115;
+  --c-saved: 67 196 138;
+  --c-spend-ink: 240 176 76;
+  --c-coral-ink: 255 140 133;
+  --c-saved-ink: 95 214 160;
+  --selection: 90 80 0;
 }
 
 * {
@@ -11,15 +59,16 @@
 }
 
 html {
-  background: #f6f7f9;
+  background: rgb(var(--c-canvas));
 }
 
 body {
   margin: 0;
-  background: #f6f7f9;
-  color: #142238;
+  background: rgb(var(--c-canvas));
+  color: rgb(var(--c-ink));
   font-family: var(--font-inter), Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 button,
@@ -33,11 +82,25 @@ button {
 }
 
 ::selection {
-  background: #fbe4e6;
-  color: #142238;
+  background: rgb(var(--selection));
+  color: rgb(var(--c-ink));
 }
 
+/* Big number: a sun-yellow marker is drawn under it, the label rises in, and the number gives a small thump when it lands */
+@keyframes fig-marker { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes fig-pop { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.035); } }
+@keyframes fig-label { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.fig-marker { transform-origin: left center; animation: fig-marker 0.7s cubic-bezier(0.22, 0.8, 0.3, 1) 0.15s both; }
+.fig-pop { transform-origin: left center; animation: fig-pop 0.42s ease-out 1.05s; }
+.fig-label { animation: fig-label 0.4s ease-out both; }
+
+/* Microphone badge: the logo's sound wave, alive while listening */
+@keyframes wave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+.wave-bar { transform-box: fill-box; transform-origin: center; }
+.wave-active .wave-bar { animation: wave 0.9s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
+  .wave-active .wave-bar { animation: none !important; }
   * {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;

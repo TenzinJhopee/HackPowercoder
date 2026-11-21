@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Figure } from "@/lib/contracts";
 import { swiss } from "./format";
 import type { GrainWorld } from "@/client/world/grain-world";
@@ -43,27 +43,38 @@ function FigureCounter({ change }: { change: FigureChange | null }) {
     return () => cancelAnimationFrame(raf);
   }, [change]);
 
-  const tone = change && change.to.value < 0 ? "text-coral-ink" : "text-ink";
+  const negative = change !== null && change.to.value < 0;
+  const tone = negative ? "text-coral-ink" : "text-ink";
+  // Re-keyed on every change so the marker sweep, the label and the landing thump play again.
+  const seq = change?.seq ?? 0;
   return (
     <div className="min-h-[5.25rem] lg:min-h-[7.25rem]">
-      <p className="min-h-[1.25rem] text-[11px] font-bold uppercase tracking-[0.15em] text-faint">{change?.to.label ?? " "}</p>
-      <p className={`text-5xl font-semibold tabular-nums leading-tight sm:text-6xl lg:text-7xl ${tone}`} aria-live="off">
-        {shown === null ? "–" : swiss(shown)}
+      <p key={`label-${seq}`} className="fig-label min-h-[1.25rem] text-[11px] font-bold uppercase tracking-[0.15em] text-faint">
+        {change?.to.label ?? " "}
+      </p>
+      <p key={`number-${seq}`} className={`fig-pop text-5xl font-semibold tabular-nums leading-tight sm:text-6xl lg:text-7xl ${tone}`} aria-live="off">
+        <span className="relative inline-block">
+          {shown !== null && <span aria-hidden="true" className={`fig-marker absolute inset-x-0 -bottom-[0.05em] h-[0.12em] rounded-full ${negative ? "bg-coral/45" : "bg-sun"}`} />}
+          <span className="relative">{shown === null ? "\u2013" : swiss(shown)}</span>
+        </span>
       </p>
     </div>
   );
 }
 
-export function Stage({ world, figure, pausedAt }: { world: GrainWorld; figure: FigureChange | null; pausedAt: string | null }) {
+export function Stage({ world, figure, pausedAt, status }: { world: GrainWorld; figure: FigureChange | null; pausedAt: string | null; status?: ReactNode }) {
   return (
-    <section aria-label="Stage" className="rounded-2xl border border-line bg-white p-5 shadow-card md:p-6">
+    <section aria-label="Stage" className="rounded-2xl border border-line bg-surface p-5 shadow-card md:flex md:h-full md:min-h-0 md:flex-col md:p-5">
       <FigureCounter change={figure} />
-      <div className="mt-2 h-60 w-full overflow-hidden sm:h-80 md:h-[26rem] lg:h-[min(32rem,62vh)] lg:min-h-[24rem]">
+      <div className="mt-2 h-60 w-full overflow-hidden sm:h-80 md:h-auto md:min-h-0 md:flex-1">
         <StageCanvas world={world} />
       </div>
-      <div className="mt-3 flex min-h-[1.75rem] items-center justify-between gap-3">
-        <p className="text-xs text-faint">1 note = CHF 100</p>
-        {pausedAt && <span className="rounded-full bg-saved/10 px-3 py-1 text-xs font-medium text-saved-ink">{`↩ Paused at ${pausedAt}`}</span>}
+      <div className="mt-3 flex min-h-[1.75rem] shrink-0 items-center justify-between gap-3">
+        <p className="shrink-0 text-xs text-faint">1 note = CHF 100</p>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+          {pausedAt && <span className="rounded-full bg-saved/10 px-3 py-1 text-xs font-medium text-saved-ink">{`↩ Paused at ${pausedAt}`}</span>}
+          {status}
+        </div>
       </div>
     </section>
   );
