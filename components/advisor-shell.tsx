@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Caption } from "./caption";
 import { Chips, InputRow, ModeLine, StatusBar, StepBar, useInputFocus } from "./controls";
 import { OfferCard } from "./offer-card";
 import { ScriptPanel } from "./script-panel";
 import { Stage } from "./stage";
-import { Takeaway } from "./takeaway";
+import { Transcript } from "./transcript";
 import { useAdvisor } from "./use-advisor";
 import { Welcome } from "./welcome";
 import { useSpeechInput } from "./use-speech-input";
@@ -50,13 +49,13 @@ export function AdvisorShell() {
           <StepBar main={advisor.mainStep} side={advisor.sideStep} mode={advisor.mode} />
         </div>
         <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start lg:gap-6">
-          <Stage world={advisor.world} figure={advisor.figure} pausedAt={pausedAt} banner={<Takeaway line={advisor.line} kind={advisor.lineKind} mode={advisor.mode} />} />
+          <Stage world={advisor.world} figure={advisor.figure} pausedAt={pausedAt} />
           <div className="flex min-w-0 flex-col gap-4">
-            {advisor.mode === "idle" ? (
+            {advisor.mode === "idle" && advisor.log.length === 0 && !advisor.line ? (
               <Welcome onSay={advisor.say} onStart={advisor.start} />
             ) : (
               <>
-                <Caption line={advisor.line} />
+                <Transcript log={advisor.log} line={advisor.line} lineKind={advisor.lineKind} />
                 {advisor.offer && <OfferCard confirmed={advisor.offerConfirmed} onConfirm={advisor.confirmOffer} />}
                 <Chips
                   mode={advisor.mode}

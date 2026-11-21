@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Figure } from "@/lib/contracts";
 import { swiss } from "./format";
 import type { GrainWorld } from "@/client/world/grain-world";
@@ -62,12 +62,11 @@ function FigureCounter({ change }: { change: FigureChange | null }) {
   );
 }
 
-export function Stage({ world, figure, pausedAt, banner }: { world: GrainWorld; figure: FigureChange | null; pausedAt: string | null; banner?: ReactNode }) {
+export function Stage({ world, figure, pausedAt }: { world: GrainWorld; figure: FigureChange | null; pausedAt: string | null }) {
   return (
     <section aria-label="Stage" className="rounded-2xl border border-line bg-surface p-5 shadow-card md:p-6">
       <FigureCounter change={figure} />
-      {banner}
-      <div className="mt-2 h-60 w-full overflow-hidden sm:h-80 md:h-[26rem] lg:h-[min(29rem,54vh)] lg:min-h-[22rem]">
+      <div className="mt-2 h-60 w-full overflow-hidden sm:h-80 md:h-[26rem] lg:h-[min(32rem,62vh)] lg:min-h-[24rem]">
         <StageCanvas world={world} />
       </div>
       <div className="mt-3 flex min-h-[1.75rem] items-center justify-between gap-3">

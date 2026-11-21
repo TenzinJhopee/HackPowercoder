@@ -13,7 +13,7 @@ import { MAIN, SIDE_ANSWERS } from "@/content/scripts";
 import { GrainWorld } from "@/client/world/grain-world";
 import { applySkin } from "@/client/world/skin";
 import { THEME_EVENT, currentTheme, type ThemeName } from "./theme";
-import type { CaptionLine } from "./caption";
+import type { CaptionLine, LogEntry } from "./transcript";
 import type { PlayingScript } from "./script-panel";
 import type { FigureChange } from "./stage";
 
@@ -27,6 +27,10 @@ type State = {
   mode: ConversationMode;
   line: CaptionLine | null;
   lineKind: LineKind | null;
+  /** Everything already said or asked, oldest first; the line being spoken is `line`. */
+  log: LogEntry[];
+  /** Next id for a log entry. */
+  seq: number;
   main: Step | null;
   side: Step | null;
   figure: FigureChange;
@@ -42,6 +46,8 @@ const initialState: State = {
   mode: "idle",
   line: null,
   lineKind: null,
+  log: [],
+  seq: 0,
   main: null,
   side: null,
   figure: { seq: 0, from: null, to: OPENING_FIGURE },
@@ -53,10 +59,22 @@ const initialState: State = {
   error: null
 };
 
-type Action = { type: "engine"; event: EngineEvent } | { type: "confirmed" } | { type: "reset" };
+type Action = { type: "engine"; event: EngineEvent } | { type: "confirmed" } | { type: "reset" } | { type: "user"; text: string };
+
+/** Moves the line being spoken into the log (interrupted lines keep how far they got). */
+function archived(state: State): Pick<State, "log" | "seq" | "line" | "lineKind"> {
+  if (!state.line || !state.lineKind) return { log: state.log, seq: state.seq, line: null, lineKind: null };
+  const entry: LogEntry = { id: state.seq, role: "advisor", kind: state.lineKind, words: state.line.words, cueIndices: state.line.cueIndices, spoken: state.line.spoken };
+  return { log: [...state.log, entry], seq: state.seq + 1, line: null, lineKind: null };
+}
 
 function reducer(state: State, action: Action): State {
-  if (action.type === "reset") return { ...initialState, figure: { seq: state.figure.seq + 1, from: null, to: OPENING_FIGURE } };
+  // Starting over keeps the conversation on screen: only the presentation state is reset.
+  if (action.type === "reset") return { ...initialState, ...archived(state), figure: { seq: state.figure.seq + 1, from: null, to: OPENING_FIGURE } };
+  if (action.type === "user") {
+    const done = archived(state);
+    return { ...state, ...done, log: [...done.log, { id: done.seq, role: "user", text: action.text }], seq: done.seq + 1 };
+  }
   if (action.type === "confirmed") return { ...state, offerConfirmed: true };
   const event = action.event;
   switch (event.type) {
@@ -64,6 +82,7 @@ function reducer(state: State, action: Action): State {
       const step = event.beatIndex !== null && event.beatCount !== null ? { index: event.beatIndex, count: event.beatCount } : null;
       return {
         ...state,
+        ...archived(state),
         line: { words: event.words, cueIndices: event.cueIndices, spoken: 0 },
         lineKind: event.kind,
         main: event.kind === "main" && step ? step : state.main,
@@ -153,9 +172,21 @@ export function useAdvisor() {
   }, [world]);
   const interrupt = useCallback(() => engine.current?.interrupt(), []);
   /** Any typed, spoken or chip text; the engine classifies it (continue / wait / end / question). */
-  const say = useCallback((text: string) => void engine.current?.input(text), []);
-  const resume = useCallback(() => void engine.current?.resume(), []);
-  const answer = useCallback((id: string) => void engine.current?.answer(id), []);
+  const say = useCallback((text: string) => {
+    dispatch({ type: "user", text });
+    void engine.current?.input(text);
+  }, []);
+  const resume = useCallback(() => {
+    dispatch({ type: "user", text: "OK, let's continue" });
+    void engine.current?.resume();
+  }, []);
+  const question = useRef<BeatQuestion | null>(null);
+  question.current = state.question;
+  const answer = useCallback((id: string) => {
+    const label = question.current?.answers.find((a) => a.id === id)?.label;
+    if (label) dispatch({ type: "user", text: label });
+    void engine.current?.answer(id);
+  }, []);
   const confirmOffer = useCallback(() => {
     engine.current?.confirmOffer(OFFER_JAR, OFFER_FIGURE);
     dispatch({ type: "confirmed" });
@@ -169,6 +200,7 @@ export function useAdvisor() {
     mode: state.mode,
     line: state.line,
     lineKind: state.lineKind,
+    log: state.log,
     figure: state.figure,
     mainStep: state.main,
     sideStep: state.side,

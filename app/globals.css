@@ -94,10 +94,6 @@ button {
 .fig-pop { transform-origin: left center; animation: fig-pop 0.42s ease-out 1.05s; }
 .fig-label { animation: fig-label 0.4s ease-out both; }
 
-/* Takeaway banner slides in under the big number */
-@keyframes takeaway-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-.takeaway-in { animation: takeaway-in 0.38s ease-out both; }
-
 /* Microphone badge: the logo's sound wave, alive while listening */
 @keyframes wave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
 .wave-bar { transform-box: fill-box; transform-origin: center; }
