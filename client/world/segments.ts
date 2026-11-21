@@ -1,5 +1,4 @@
-import { theme } from "@/components/theme";
-import { palette, rgb, type RGB } from "./engine";
+import { palette, setRgb, type RGB } from "./engine";
 import { largestRemainder } from "./layout";
 
 /**
@@ -18,18 +17,32 @@ import { largestRemainder } from "./layout";
 export type SegmentSource = { name: string; value: number; aliases?: string[] };
 export type Segment = SegmentSource & { count: number; color: RGB };
 
-const luminance = (hex: string) => {
-  const [r, g, b] = rgb(hex);
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-};
-/** Light text means a dark stage (the original night theme); the Luma theme has dark text on white. */
-const darkStage = luminance(theme.paper) > 0.5;
+const mutable = (): [number, number, number] => [0, 0, 0];
+const SKY = mutable();
+const INDIGO = mutable();
+const ORCHID = mutable();
+const STEEL = mutable();
+const MIST = mutable();
 
-const SKY = rgb(darkStage ? "#4d97de" : "#549de5");
-const INDIGO = rgb(darkStage ? "#4d5aac" : "#2b519c");
-const ORCHID = rgb(darkStage ? "#b466a6" : "#ae60a0");
-const STEEL = rgb(darkStage ? "#a3aab8" : "#7d889b");
-const MIST = rgb(darkStage ? "#5b6271" : "#bcc3ce");
+/** The hues for the light stage (the Luma/TellHorn look) and for the dark stage (see the table above). */
+const HUES = {
+  light: { sky: "#549de5", indigo: "#2b519c", orchid: "#ae60a0", steel: "#7d889b", mist: "#bcc3ce" },
+  dark: { sky: "#4d97de", indigo: "#4d5aac", orchid: "#b466a6", steel: "#a3aab8", mist: "#5b6271" }
+} as const;
+
+/** The entries below are shared by reference, so switching the look is one in-place update. */
+export function applySegmentColors(dark: boolean): void {
+  const h = dark ? HUES.dark : HUES.light;
+  setRgb(SKY, h.sky);
+  setRgb(INDIGO, h.indigo);
+  setRgb(ORCHID, h.orchid);
+  setRgb(STEEL, h.steel);
+  setRgb(MIST, h.mist);
+}
+applySegmentColors(false);
+
+/** Every segment colour, for recolouring grains when the look changes. */
+export const segmentColors = (): RGB[] => [SKY, INDIGO, ORCHID, STEEL, MIST];
 
 type Entity = "Housing" | "Travel" | "Electronics" | "Bike" | "Health" | "Other" | null;
 const FIXED: Record<Exclude<Entity, null>, RGB> = { Housing: palette.spend, Travel: SKY, Electronics: INDIGO, Bike: ORCHID, Health: STEEL, Other: MIST };

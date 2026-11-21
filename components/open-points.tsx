@@ -43,7 +43,7 @@ function Row({ point, open, onToggle, onAnswer }: { point: OpenPoint; open: bool
               key={a.id}
               type="button"
               onClick={() => onAnswer(a.id, point.subject)}
-              className={`min-h-8 rounded-full border border-line bg-white px-2.5 py-1 text-left text-xs font-medium text-ink shadow-sm transition-colors hover:border-slate-300 ${focusRing}`}
+              className={`min-h-8 rounded-full border border-line bg-surface px-2.5 py-1 text-left text-xs font-medium text-ink shadow-sm transition-colors hover:border-brand/40 ${focusRing}`}
             >
               {a.label}
             </button>
@@ -67,7 +67,7 @@ export function OpenPoints({ points, onAnswer, onForget }: { points: OpenPoint[]
   const openSubject = pickHolds ? picked.subject : (unanswered.at(-1)?.subject ?? null);
 
   return (
-    <section aria-label="Open points" className="rounded-2xl border border-line bg-white px-5 py-4 shadow-card">
+    <section aria-label="Open points" className="rounded-2xl border border-line bg-surface px-5 py-4 shadow-card">
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-faint">What I can&apos;t see in these accounts</p>
         {unanswered.length > 0 && <p className="shrink-0 text-[11px] font-medium text-faint">{unanswered.length} open</p>}

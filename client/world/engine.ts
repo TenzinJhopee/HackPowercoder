@@ -28,6 +28,15 @@ export const palette = {
   brand: rgb(theme.brand)
 } as const;
 
+/** Overwrites an RGB triplet in place. Palette entries are shared by reference, so everything holding one follows. */
+export function setRgb(target: RGB, hex: string): void {
+  const c = rgb(hex);
+  const t = target as unknown as number[];
+  t[0] = c[0];
+  t[1] = c[1];
+  t[2] = c[2];
+}
+
 /** Deterministic noise in [0, 1) per grain and salt: everything visible is seeded (backup video must replay). */
 export function noise(id: number, salt = 0): number {
   let h = Math.imul(id ^ 0x5bd1e995, 0x85ebca6b) ^ Math.imul(salt + 0x27d4eb2f, 0xc2b2ae35);
@@ -186,6 +195,23 @@ function motionPoint(m: Motion, now: number): typeof point {
 
 type Spark = { on: boolean; sx: number; sy: number; cx: number; cy: number; ex: number; ey: number; t0: number; dur: number; r: number; fill: string };
 
+type LabelItem = {
+  text: string;
+  x: number;
+  y: number;
+  key: string;
+  color: string;
+  alpha: number;
+  size: number;
+  weight: number;
+  align: CanvasTextAlign;
+  baseline: CanvasTextBaseline;
+  font: string;
+};
+
+/** Pixels a label may move down (+) or up (-) to find a free spot, nearest first. */
+const LABEL_SHIFTS = [0, 13, -13, 26, -26, 39, -39, 52, -52];
+
 export class Engine {
   grains: Grain[] = [];
   width = 0;
@@ -202,6 +228,8 @@ export class Engine {
   spot = { x: 0, y: 0, r: 0, a: 0, aTo: 0 };
   /** A ring travelling out through a cluster (focus "ripple"). */
   ripple = { on: false, x: 0, y: 0, R: 0, t0: 0, dur: 1300 };
+  private labelQueue: LabelItem[] = [];
+  private labelWidths = new Map<string, number>();
   /**
    * Hand zoom/pan over the scene's camera, in screen space: screen' = s * screen + (x, y). Gestures write `user`
    * directly; `userTo` is only used while easing back to none. Folded into `view`, so notes, labels and overlays follow.
@@ -422,6 +450,30 @@ export class Engine {
     r.t0 = performance.now() + delay;
   }
 
+  /**
+   * The look changed (light/dark): every grain colour that equals a `from` colour becomes its `to` colour, so the
+   * grains change at once without flying anywhere. Colours a scene sets later come from the (already updated) palette.
+   */
+  recolor(pairs: readonly (readonly [RGB, RGB])[]): void {
+    this.spotGradient = null;
+    const swap = (c: RGB): boolean => {
+      for (const [from, to] of pairs) {
+        if (c[0] === from[0] && c[1] === from[1] && c[2] === from[2]) {
+          const t = c as unknown as number[];
+          t[0] = to[0];
+          t[1] = to[1];
+          t[2] = to[2];
+          return true;
+        }
+      }
+      return false;
+    };
+    for (const g of this.grains) {
+      if (swap(g.color)) g.fill = fillOf(g.color);
+      swap(g.c0);
+    }
+  }
+
   /** Taşıma: a few sparks leave a world cluster and travel to the top centre of the stage (where the big figure sits). */
   carry(x: number, y: number, R: number, color: RGB, count = 7): void {
     if (this.reduced || !this.width) return;
@@ -467,6 +519,11 @@ export class Engine {
   }
 
   /** Text at a world point, drawn in screen space so it stays readable at any zoom. */
+  /**
+   * Queues a text label for this frame (world position, optional offset). Nothing is drawn here: flushLabels() places
+   * all labels together so they never overlap each other, stay inside the canvas and read over the grains.
+   * Labels sharing the same anchor (a name and its value) move as one.
+   */
   label(
     ctx: CanvasRenderingContext2D,
     text: string,
@@ -477,12 +534,105 @@ export class Engine {
     const alpha = o.alpha ?? 1;
     if (alpha < 0.01) return;
     const [sx, sy] = this.toScreen(x, y);
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = o.color ?? theme.faint;
-    ctx.font = `${o.weight ?? 400} ${o.size ?? 11}px Inter, Arial, sans-serif`;
-    ctx.textAlign = o.align ?? "center";
-    ctx.textBaseline = o.baseline ?? "alphabetic";
-    ctx.fillText(text, sx, sy + (o.dy ?? 0));
+    const size = o.size ?? 11;
+    const weight = o.weight ?? 400;
+    const align = o.align ?? "center";
+    this.labelQueue.push({
+      text,
+      x: sx,
+      y: sy + (o.dy ?? 0),
+      key: `${Math.round(sx)}:${Math.round(sy)}:${align}`,
+      color: o.color ?? theme.faint,
+      alpha,
+      size,
+      weight,
+      align,
+      baseline: o.baseline ?? "alphabetic",
+      font: `${weight} ${size}px Inter, Arial, sans-serif`
+    });
+  }
+
+  private textWidth(ctx: CanvasRenderingContext2D, item: LabelItem): number {
+    const key = `${item.font}|${item.text}`;
+    let w = this.labelWidths.get(key);
+    if (w === undefined) {
+      ctx.font = item.font;
+      w = ctx.measureText(item.text).width;
+      if (this.labelWidths.size > 400) this.labelWidths.clear();
+      this.labelWidths.set(key, w);
+    }
+    return w;
+  }
+
+  /** Where a label sits on screen after moving it `shift` px down; the box is what other labels must keep clear of. */
+  private labelBox(ctx: CanvasRenderingContext2D, item: LabelItem, shift: number): Box {
+    const w = this.textWidth(ctx, item);
+    const x = item.align === "center" ? item.x - w / 2 : item.align === "right" || item.align === "end" ? item.x - w : item.x;
+    const top = item.baseline === "alphabetic" ? item.y + shift - item.size : item.baseline === "middle" ? item.y + shift - item.size / 2 : item.y + shift;
+    return { x, y: top, w, h: item.size * 1.25 };
+  }
+
+  /** Draws the queued labels: most important first, each moved up or down to the nearest free spot. */
+  private flushLabels(ctx: CanvasRenderingContext2D): void {
+    const items = this.labelQueue;
+    this.labelQueue = [];
+    if (!items.length) return;
+    const W = this.width;
+    const H = this.height;
+    const groups = new Map<string, LabelItem[]>();
+    for (const item of items) {
+      const group = groups.get(item.key);
+      if (group) group.push(item);
+      else groups.set(item.key, [item]);
+    }
+    const rank = (g: LabelItem[]) => Math.max(...g.map((i) => i.weight / 100 + i.alpha * 5));
+    const order = [...groups.values()].sort((a, b) => rank(b) - rank(a));
+
+    const pad = 3;
+    const overlaps = (a: Box, b: Box) => a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad;
+    const inside = (b: Box) => b.y >= 2 && b.y + b.h <= H - 2;
+    const placed: Box[] = [];
+    const [sr, sg, sb] = rgb(theme.surface);
+    const halo = `rgba(${sr},${sg},${sb},0.9)`;
+
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.lineJoin = "round";
+    for (const group of order) {
+      const visible = Math.max(...group.map((i) => i.alpha)) >= 0.35;
+      let shift = 0;
+      if (visible) {
+        const free = LABEL_SHIFTS.find((d) =>
+          group.every((item) => {
+            const box = this.labelBox(ctx, item, d);
+            return inside(box) && !placed.some((p) => overlaps(box, p));
+          })
+        );
+        if (free !== undefined) shift = free;
+        else {
+          // No free spot: at least keep it inside the canvas.
+          const tops = group.map((item) => this.labelBox(ctx, item, 0));
+          const up = Math.min(...tops.map((b) => b.y)) - 2;
+          const down = H - 2 - Math.max(...tops.map((b) => b.y + b.h));
+          shift = up < 0 ? -up : down < 0 ? down : 0;
+        }
+      }
+      for (const item of group) {
+        const box = this.labelBox(ctx, item, shift);
+        // Keep the text inside the canvas sideways too.
+        const dx = box.x < 4 ? 4 - box.x : box.x + box.w > W - 4 ? W - 4 - (box.x + box.w) : 0;
+        if (visible) placed.push({ ...box, x: box.x + dx });
+        ctx.font = item.font;
+        ctx.textAlign = item.align;
+        ctx.textBaseline = item.baseline;
+        ctx.globalAlpha = item.alpha;
+        // A soft outline in the stage colour keeps the text readable where it crosses grains.
+        ctx.strokeStyle = halo;
+        ctx.lineWidth = 3.4;
+        ctx.strokeText(item.text, item.x + dx, item.y + shift);
+        ctx.fillStyle = item.color;
+        ctx.fillText(item.text, item.x + dx, item.y + shift);
+      }
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -727,6 +877,7 @@ export class Engine {
     if (this.spot.a > 0.01) this.drawSpot(ctx);
     this.drawSparks(ctx, now);
     this.layer?.drawOver?.(ctx, now);
+    this.flushLabels(ctx);
   }
 
   /** One radial gradient over the whole view, cached while the spot stays put. */
@@ -735,8 +886,10 @@ export class Engine {
     let cache = this.spotGradient;
     if (!cache || cache.x !== sp.x || cache.y !== sp.y || cache.r !== sp.r) {
       const g = ctx.createRadialGradient(sp.x, sp.y, sp.r * 0.8, sp.x, sp.y, sp.r * 2.6);
-      g.addColorStop(0, "rgba(255,255,255,0)");
-      g.addColorStop(1, "rgba(255,255,255,0.8)");
+      // The vignette fades towards the stage colour, whichever look is active.
+      const [sr, sg, sb] = rgb(theme.surface);
+      g.addColorStop(0, `rgba(${sr},${sg},${sb},0)`);
+      g.addColorStop(1, `rgba(${sr},${sg},${sb},0.8)`);
       cache = this.spotGradient = { g, x: sp.x, y: sp.y, r: sp.r };
     }
     const grad = cache.g;
