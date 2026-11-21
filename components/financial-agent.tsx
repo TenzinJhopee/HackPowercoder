@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { AudioLines, Bot, LoaderCircle, Mic, Plus, Send, ShieldCheck, Sparkles, Square, Volume2 } from "lucide-react";
 import { FinancialAnswerVisual } from "@/components/financial-answer-visual";
+import { buildAssistantAnalysisContext } from "@/lib/assistant-analysis-context";
 import { create_budget } from "@/lib/financial-tools";
 import { executeFinancialTool, selectFinancialTool } from "@/lib/financial-agent";
 import { formatMoney } from "@/lib/finance";
 import { createFinancialVisualization } from "@/lib/financial-visualization";
 import type { FinancialVisualization } from "@/lib/financial-visualization";
 import { microphoneErrorMessage } from "@/lib/voice-errors";
-import type { Budget, Investment, Transaction, UpcomingBill } from "@/lib/models";
+import type { Budget, Investment, SavingsTarget, Transaction, UpcomingBill } from "@/lib/models";
 import type { FinancialToolName } from "@/lib/financial-agent";
 
 interface ChatMessage {
@@ -28,6 +29,7 @@ interface FinancialAgentProps {
   budgets: Budget[];
   investments: Investment[];
   bills: UpcomingBill[];
+  savingsTarget?: SavingsTarget;
   onCreateBudgets: (values: Budget[]) => Promise<void>;
 }
 
@@ -115,7 +117,7 @@ function minimizeForProvider(value: unknown): unknown {
     .map(([key, child]) => [key, minimizeForProvider(child)]));
 }
 
-export function FinancialAgent({ transactions, currency, budgets, investments, bills, onCreateBudgets }: FinancialAgentProps) {
+export function FinancialAgent({ transactions, currency, budgets, investments, bills, savingsTarget, onCreateBudgets }: FinancialAgentProps) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([{
     id: "welcome",
@@ -203,7 +205,15 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
               consent: true,
               question: prompt,
               tool,
-              toolResult: JSON.stringify(minimizeForProvider(result))
+              toolResult: JSON.stringify(minimizeForProvider(result)),
+              analysisContext: JSON.stringify(buildAssistantAnalysisContext({
+                transactions,
+                currency,
+                budgets,
+                investments,
+                bills,
+                savingsTarget
+              }))
             })
           });
           const payload = await response.json() as { explanation?: string; error?: string };
@@ -426,7 +436,7 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
               </label>
               <label className="flex items-start gap-2 leading-4">
                 <input checked={sharingConsent} className="mt-0.5 accent-violet-400" id="agent-sharing-consent" onChange={(event) => setSharingConsent(event.target.checked)} type="checkbox" />
-                <span><span className="font-semibold text-white/75">Use local Ollama</span> — send this question and its minimized calculation to Apertus on this device. No transaction rows or cloud LLM services are used.</span>
+                <span><span className="font-semibold text-white/75">Use local Ollama</span> — send your question, its calculation, and an aggregate summary of your saved finances to Qwen on this device. Raw rows, account IDs, and files are not sent.</span>
               </label>
             </div>
           </details>

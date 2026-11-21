@@ -54,8 +54,16 @@ export async function getOllamaConnectionStatus() {
   }
 }
 
-export async function explainFinancialToolResult(question: string, tool: FinancialToolName, toolResult: string): Promise<string> {
+export async function explainFinancialToolResult(
+  question: string,
+  tool: FinancialToolName,
+  toolResult: string,
+  analysisContext?: string
+): Promise<string> {
   const { base, model } = getOllamaConfig();
+  const analysisSummary = analysisContext?.trim()
+    ? `\nCurrent financial analysis snapshot (verified local aggregates): ${analysisContext}`
+    : "";
   let response: Response;
   try {
     response = await fetch(new URL("/api/chat", base), {
@@ -67,7 +75,7 @@ export async function explainFinancialToolResult(question: string, tool: Financi
         options: { temperature: 0.2 },
         messages: [
           { role: "system", content: financialAgentSystemPrompt },
-          { role: "user", content: `User question: ${question}\nSelected deterministic tool: ${tool}\nTool result (verified, JSON): ${toolResult}` }
+          { role: "user", content: `User question: ${question}\nSelected deterministic tool: ${tool}\nTool result (verified, JSON): ${toolResult}${analysisSummary}` }
         ]
       }),
       signal: AbortSignal.timeout(120_000),

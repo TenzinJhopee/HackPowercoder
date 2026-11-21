@@ -710,7 +710,7 @@ export function FinancialApp() {
   const MainIcon = navigation.find((item) => item.name === section)?.icon ?? Home;
 
   if (section === "AI Assistant") {
-    return <FinancialAgent bills={bills} budgets={budgets} currency={selectedCurrency} investments={investments} onCreateBudgets={createBudgets} transactions={transactions} />;
+    return <FinancialAgent bills={bills} budgets={budgets} currency={selectedCurrency} investments={investments} onCreateBudgets={createBudgets} savingsTarget={savingsTargets.find((item) => item.currency === selectedCurrency)} transactions={transactions} />;
   }
 
   return (
