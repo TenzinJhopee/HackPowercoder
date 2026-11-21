@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, AudioLines, Bot, LoaderCircle, Mic, Plus, Send, ShieldCheck, Sparkles, Square, Volume2 } from "lucide-react";
+import { AudioLines, Bot, LoaderCircle, Mic, Plus, Send, ShieldCheck, Sparkles, Square, Volume2 } from "lucide-react";
 import { create_budget } from "@/lib/financial-tools";
 import { executeFinancialTool, selectFinancialTool } from "@/lib/financial-agent";
 import { formatMoney } from "@/lib/finance";
@@ -25,7 +25,6 @@ interface FinancialAgentProps {
   investments: Investment[];
   bills: UpcomingBill[];
   onCreateBudgets: (values: Budget[]) => Promise<void>;
-  onExit: () => void;
 }
 
 const suggestedQuestions = [
@@ -112,7 +111,7 @@ function minimizeForProvider(value: unknown): unknown {
     .map(([key, child]) => [key, minimizeForProvider(child)]));
 }
 
-export function FinancialAgent({ transactions, currency, budgets, investments, bills, onCreateBudgets, onExit }: FinancialAgentProps) {
+export function FinancialAgent({ transactions, currency, budgets, investments, bills, onCreateBudgets }: FinancialAgentProps) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([{
     id: "welcome",
@@ -359,7 +358,6 @@ export function FinancialAgent({ transactions, currency, budgets, investments, b
               <span className="block truncate text-[8px] text-white/45 sm:text-[9px]">{ollamaStatus?.model ?? "MichelRosselli/apertus:latest"}</span>
             </span>
           </span>
-          <button aria-label="Back to workspace" className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-xs text-white/65 transition hover:border-violet-300/40 hover:bg-white/5 hover:text-white" onClick={onExit} type="button"><ArrowLeft size={14} /><span className="hidden sm:inline">Workspace</span></button>
         </div>
       </header>
 

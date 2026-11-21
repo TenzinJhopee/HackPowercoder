@@ -1,5 +1,4 @@
 {
-  "/api/agent/respond/route": "app/api/agent/respond/route.js",
   "/api/agent/status/route": "app/api/agent/status/route.js",
   "/page": "app/page.js"
 }

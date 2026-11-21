@@ -527,7 +527,7 @@ function SettingsModal({ transactions, onClose, onClear, onImport }: { transacti
 
 export function FinancialApp() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [section, setSection] = useState<Section>("Overview");
+  const [section, setSection] = useState<Section>("AI Assistant");
   const [currency, setCurrency] = useState("CHF");
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
@@ -576,7 +576,7 @@ export function FinancialApp() {
   function showDemo() {
     setTransactions(createDemoTransactions());
     setCurrency("CHF");
-    setSection("Overview");
+    setSection("AI Assistant");
     setError("");
   }
 
@@ -588,7 +588,7 @@ export function FinancialApp() {
     setCategoryRules([]);
     setSavingsTargets([]);
     setSettingsOpen(false);
-    setSection("Overview");
+    setSection("AI Assistant");
     setBudgets([]);
   }
 
@@ -702,7 +702,7 @@ export function FinancialApp() {
     }
   }
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center bg-canvas"><div className="flex items-center gap-3 text-sm text-slate-500"><LoaderCircle className="animate-spin text-brand" size={18} />Opening your private workspace…</div></div>;
+  if (loading) return <div className="flex min-h-screen items-center justify-center bg-canvas"><div className="flex items-center gap-3 text-sm text-slate-500"><LoaderCircle className="animate-spin text-brand" size={18} />Opening your AI assistant…</div></div>;
   if (!transactions.length) return <Onboarding error={error} onDemo={showDemo} onImported={handleImport} />;
 
   const currencies = getCurrencies(transactions);
@@ -710,7 +710,7 @@ export function FinancialApp() {
   const MainIcon = navigation.find((item) => item.name === section)?.icon ?? Home;
 
   if (section === "AI Assistant") {
-    return <FinancialAgent bills={bills} budgets={budgets} currency={selectedCurrency} investments={investments} onCreateBudgets={createBudgets} onExit={() => setSection("Overview")} transactions={transactions} />;
+    return <FinancialAgent bills={bills} budgets={budgets} currency={selectedCurrency} investments={investments} onCreateBudgets={createBudgets} transactions={transactions} />;
   }
 
   return (
