@@ -132,7 +132,7 @@ function transactionKind(rawType: string, amount: number, description: string, s
   const detail = description.toLowerCase();
   const ownAccounts = /^account\d+$/i.test(source) && /^account\d+$/i.test(target);
   if (/transfer|own account|internal|übertrag|uebertrag|kreditkarten-zahlung/.test(type) || ownAccounts || /own account|internal transfer|transfer between accounts|account-to-account|kreditkarten-zahlung/.test(detail)) return "transfer";
-  if (/investment|security|securities|etf|share purchase|stock/.test(`${type} ${detail}`)) return "investment";
+  if (/investment|securities|\bsecurity\b|\betf\b|share purchase|\bstock\b/.test(`${type} ${detail}`)) return "investment";
   if (/refund|reversal|chargeback|erstattung|rückerstattung/.test(`${type} ${description.toLowerCase()}`)) return "refund";
   if (/credit.?card.?payment|debit.?card.?payment/.test(type)) return "expense";
   if (/income|credit|deposit|salary|payroll|gutschrift|haben/.test(type)) return "income";

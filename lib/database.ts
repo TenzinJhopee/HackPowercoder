@@ -1,10 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import Papa from "papaparse";
-import { deduplicateTransactions } from "@/lib/intelligence";
-import { detectColumnMapping, normalizeRows } from "@/lib/csv";
-import type { ParsedCsvFile, Transaction } from "@/lib/models";
+import { loadAccountCsv } from "@/lib/load-accounts";
+import type { Transaction } from "@/lib/models";
 
 const dataDirectory = path.join(process.cwd(), "data");
 const databasePath = path.join(dataDirectory, "finance.sqlite");
@@ -18,6 +16,7 @@ function getDatabase() {
     database = new DatabaseSync(databasePath);
     database.exec(`
       PRAGMA journal_mode = WAL;
+      PRAGMA busy_timeout = 5000;
       CREATE TABLE IF NOT EXISTS transactions (
         id TEXT PRIMARY KEY,
         date TEXT NOT NULL,
@@ -42,29 +41,22 @@ function getDatabase() {
 }
 
 function readSeedTransactions() {
-  const files = [
-    path.join(dataDirectory, "Account1.csv"),
-    path.join(dataDirectory, "Account3.csv")
-  ];
+  const files = ["Account1.csv", "Account3.csv"];
   const transactions: Transaction[] = [];
-  for (const filePath of files) {
-    const text = fs.readFileSync(filePath, "utf8");
-    const result = Papa.parse<Record<string, unknown>>(text, {
-      header: true,
-      skipEmptyLines: "greedy",
-      transformHeader: (header) => header.trim()
-    });
-    const parsedFile: ParsedCsvFile = {
-      id: path.basename(filePath),
-      name: path.basename(filePath),
-      headers: result.meta.fields ?? [],
-      rows: result.data,
-      mapping: detectColumnMapping(result.meta.fields ?? []),
-      parseWarnings: result.errors.map((error) => `Row ${error.row ?? "?"}: ${error.message}`)
-    };
-    transactions.push(...normalizeRows(parsedFile).transactions);
+  for (const file of files) {
+    const text = fs.readFileSync(path.join(dataDirectory, file), "utf8");
+    transactions.push(...loadAccountCsv(text, file).transactions);
   }
-  return deduplicateTransactions(transactions).transactions;
+  return transactions;
+}
+
+/** Deletes and rebuilds the database from the CSV files (`npm run db:seed`). */
+export async function reseedDatabase() {
+  getDatabase().exec("DELETE FROM transactions");
+  initialized = undefined;
+  await initializeDatabase();
+  // Fold any old WAL content into the main file so the repo only needs finance.sqlite.
+  getDatabase().exec("PRAGMA wal_checkpoint(TRUNCATE);");
 }
 
 export async function initializeDatabase() {

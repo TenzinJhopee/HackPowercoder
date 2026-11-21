@@ -8,7 +8,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "pregen:voice": "tsx scripts/pregen-voice.ts"
+    "pregen:voice": "tsx scripts/pregen-voice.ts",
+    "db:seed": "tsx scripts/seed-db.ts"
   },
   "dependencies": {
     "next": "^16.4.6",
