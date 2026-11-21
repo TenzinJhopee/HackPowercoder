@@ -147,3 +147,36 @@ test("intent rules", () => {
   assert.equal(monthIn("May I ask something"), null);
   assert.equal(monthIn("what happened in May"), 5);
 });
+
+test("the savings answer emits its plan; the slip reveals a line per beat and stays after the answer", async () => {
+  const { SIDE_ANSWERS, SAVE_EXAMPLE } = await import("../content/scripts");
+  const { keepReducer } = await import("../components/keepsake");
+  const log: string[] = [];
+  const talk = new Conversation({ world: new StubWorld({ log }), voice: new FakeVoice(log, () => false), main: MAIN, prepared: SIDE_ANSWERS, backup: true });
+  const events: import("../client/events").EngineEvent[] = [];
+  talk.on((event) => events.push(event));
+
+  await talk.ask(SAVE_EXAMPLE);
+  const keep = events.findIndex((e) => e.type === "keep");
+  const firstLine = events.findIndex((e) => e.type === "line");
+  assert.ok(keep >= 0 && keep < firstLine, "plan arrives before the first beat");
+  const event = events[keep];
+  assert.ok(event.type === "keep");
+  const { plan, names } = event.keepsake;
+  assert.equal(plan.shortfall, 0);
+  assert.equal(names.length, plan.cuts.length);
+  assert.ok(names.includes("canteen lunches"));
+
+  let slip = null as ReturnType<typeof keepReducer>;
+  const revealed: number[] = [];
+  for (const e of events) {
+    slip = keepReducer(slip, e);
+    if (e.type === "line") revealed.push(slip!.revealed);
+  }
+  assert.deepEqual(revealed, [...plan.cuts.map((_, i) => i + 1), plan.cuts.length + 1]);
+  assert.equal(slip?.live, false);
+  for (const e of [{ type: "mode", mode: "presenting", previous: "waiting" }, { type: "line", text: "x", words: ["x"], cueIndices: [], kind: "side", beatIndex: 0, beatCount: 1 }] satisfies import("../client/events").EngineEvent[]) {
+    slip = keepReducer(slip, e);
+  }
+  assert.equal(slip?.revealed, plan.cuts.length + 1, "later answers leave the slip alone");
+});

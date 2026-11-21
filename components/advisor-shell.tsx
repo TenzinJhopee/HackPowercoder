@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Caption } from "./caption";
 import { Chips, InputRow, ModeLine, StatusBar, StepBar, useInputFocus } from "./controls";
 import { OfferCard } from "./offer-card";
+import { SavingsSlip } from "./savings-slip";
 import { ScriptPanel } from "./script-panel";
 import { Stage } from "./stage";
 import { useAdvisor } from "./use-advisor";
@@ -79,6 +80,7 @@ export function AdvisorShell() {
               onMicUp={mic.stop}
               inputRef={input.ref}
             />
+            {advisor.slip && <SavingsSlip slip={advisor.slip} onClose={advisor.closeSlip} />}
             <p className="text-xs leading-5 text-faint">
               {liveText} · {advisor.availability.voiceLine} · {micText}
             </p>
