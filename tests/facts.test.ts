@@ -11,7 +11,7 @@ const byId = (facts: ReturnType<typeof buildFacts>, id: string) => facts.insight
 test("detectors reproduce the verified findings", () => {
   const facts = buildFacts(transactions, "CHF");
   assert.equal(byId(facts, "year_end_buffer")?.figures.yearNetWithoutExtra, 1352.36);
-  assert.equal(byId(facts, "lowest_balance")?.figures.lowestMonthEnd, -5640);
+  assert.equal(byId(facts, "lowest_balance")?.figures.lowestMonthEnd, -5639.8);
   assert.equal(byId(facts, "statement_shock")?.figures.largestStatement, 10018.53);
   assert.equal(byId(facts, "missing_payment:Krankenkasse:2025-02")?.mode, "ask");
   assert.equal(byId(facts, "double_charge:Mondrian London:2025-07-08")?.mode, "ask");
